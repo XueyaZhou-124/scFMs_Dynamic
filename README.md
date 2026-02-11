@@ -63,10 +63,3 @@ cat results/Dataset/benchmark_summary.csv
 
 ```
 
-
-
-### 下一步建议：
-
-你的 `pixi run -e [model_name]` 这种设计非常符合 NBT 对软件复现性的高要求。
-
-**既然你的流程已经梳理清楚了，需要我帮你写那个 `01_extract_all_embeddings.sh` 的 Shell 脚本模板，以及对应的 `README` 中“如何添加一个新模型到 Benchmark”的开发者指南吗？**（这能显示你框架的扩展性，是加分项！）
