@@ -1,0 +1,16 @@
+{
+    "claude-code.environmentVariables": [
+            {
+        "name": "ANTHROPIC_BASE_URL",
+        "value": "https://code.nonocode.org/api"
+    },
+    // {
+    //     "name": "ANTHROPIC_AUTH_TOKEN",
+    //     "value": "cr_d552b33bb763a0684baf79ed4241a9ee27965cb2d159db0500a7bed566c01a7c"
+    // },
+    {
+    "name": "ANTHROPIC_API_KEY",
+    "value": "cr_d552b33bb763a0684baf79ed4241a9ee27965cb2d159db0500a7bed566c01a7c"
+    }
+    ]
+}

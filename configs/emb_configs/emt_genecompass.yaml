@@ -1,0 +1,29 @@
+model: genecompass
+task_name: EMT
+
+data:
+  input_path: ../data/raw/EMT/raw.h5ad
+
+external:
+  gene_id_to_name_path: '/macroverse/public/zhouxy/pretrained_models/GeneCompass/prior_knowledge/gene_list/Gene_id_name_dict_human_mouse.pickle'
+  gene_token_dict_path: '/macroverse/public/zhouxy/pretrained_models/GeneCompass/prior_knowledge/human_mouse_tokens.pickle'
+  gene_median_dict_path: '/macroverse/public/zhouxy/pretrained_models/Geneformer/geneformer/gene_median_dictionary_gc104M.pkl'
+
+
+preprocess:
+  gene_key: name
+  species: human
+
+
+embedding: 
+  model_path: '/macroverse/public/zhouxy/pretrained_models/GeneCompass/pretrained_models/GeneCompass_Base/' # huggingface pretrained model path
+  setting: 'zeroshot'
+  select_col: ["Time", "Phase"] # 需要保存哪些列的meta信息, 如果为空保存所有obs信息
+  batch_size: 64
+
+evaluate:
+  emb_dim: 768
+  labels: ['Phase', 'Time']
+  umap_keys: ['Phase', 'Time']
+  batch_key: 'Phase'
+

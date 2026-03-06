@@ -1,0 +1,20 @@
+model: uce
+task_name: EMT
+
+data:
+  input_path: data/raw/EMT/raw.h5ad
+
+preprocess:
+  species: human
+
+embedding: 
+  model_path: /macroverse/public/zhouxy/pretrained_models/UCE
+  species: human
+  batch_size: 128
+  nlayers: 33
+
+evaluate:
+  labels: ['Phase', 'Time']
+  umap_keys: ['Phase', 'Time']
+  batch_key: 'Time'
+

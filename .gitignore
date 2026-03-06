@@ -1,0 +1,16 @@
+data/
+results/
+artifacts/
+*.h5ad
+*.pth
+*.ckpt
+*.npy
+*.csv
+
+# environment
+.pixi/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+__MACOSX/
+

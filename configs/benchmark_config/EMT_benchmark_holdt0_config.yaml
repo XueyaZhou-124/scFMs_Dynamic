@@ -1,0 +1,56 @@
+align_strategies:
+- identity
+- procrustes
+- ridge
+dataset:
+  name: EMT
+  path: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/EMT
+  pseudotime_key: Pseudotime
+  ref_key: hvg
+  test_times:
+  - 0
+  time_key: time
+  train_times:
+  - 1
+  - 2
+  - 3
+dynamic_methods:
+- engine_config:
+    generate_script: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/infer_RUOT.py
+    num_runs: 10
+    python_exec: python
+    run_pattern: sde_run_*.npz
+    template_cfg: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/config/emt_config.yaml
+    train_script: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/train_RUOT.py
+  engine_type: deepruot
+  name: deepruot
+  params:
+    dim:
+    - 50
+    - 10
+    - 5
+    - 20
+    otmode:
+    - ruot
+    - dot
+    - sb
+    - uot
+metrics:
+- w1tmv
+- tcvc
+- pseudotime
+models:
+- hvg
+- genecompass
+- uce
+- scgpt
+- scfoundation
+- geneformer
+options:
+  max_workers: 6
+  skip_existing: true
+paths:
+  artifacts: /macroverse/public/zhouxy/scllms/scFMs_dynamic/artifacts/EMT_holdt0
+  benchmark_results: /macroverse/public/zhouxy/scllms/scFMs_dynamic/results/EMT_holdt0
+  input_dir: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT
+  results_dir: /macroverse/public/zhouxy/scllms/scFMs_dynamic/results/dynamic_results/EMT

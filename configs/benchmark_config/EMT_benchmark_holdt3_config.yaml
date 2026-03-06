@@ -1,0 +1,37 @@
+dataset:
+  name: "EMT"
+  path: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/EMT"
+  ref_key: "hvg"
+  time_key: "time"
+  pseudotime_key: "Pseudotime"
+  train_times: [0, 1, 2]
+  test_times: [3]
+
+paths:
+  input_dir: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT"
+  results_dir: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/results/dynamic_results/EMT"
+  artifacts: "./artifacts/EMT"
+  benchmark_results: "./results/EMT"
+
+models: ["hvg", "genecompass", "uce", "scgpt", "scfoundation", "geneformer"]
+
+dynamic_methods:
+  - name: deepruot
+    engine_type: deepruot
+    params:
+      dim: [50, 10, 5, 20]
+      otmode: ["ruot", "dot", "sb", "uot"]
+    engine_config:
+      train_script: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/train_RUOT.py"
+      generate_script: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/infer_RUOT.py"
+      template_cfg: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/config/emt_config.yaml"
+      python_exec: "python"
+      num_runs: 10
+      run_pattern: "sde_run_*.npz" # DeepRUOT 生成的文件匹配
+
+align_strategies: ["identity", "procrustes", 'ridge']
+metrics: ["w1tmv", "tcvc", "pseudotime"]
+
+options:
+  skip_existing: true
+  max_workers: 24

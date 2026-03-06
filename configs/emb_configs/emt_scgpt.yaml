@@ -1,0 +1,26 @@
+model: scgpt
+task_name: EMT
+
+data:
+  input_path: data/raw/EMT/raw.h5ad
+
+preprocess:
+  gene_key: name
+  species: human
+  # output_path: data/processed/ # 通过task name自动生成{taskname}_geneformer.dataset
+  # custom_attr_name_dict:
+  #   "Time": "time_point"
+  #   "Phase": "cell_pahse"
+
+embedding: 
+  model_path: '/macroverse/public/zhouxy/pretrained_models/scGPT/scgpt_human' # huggingface pretrained model path
+  setting: 'zeroshot'
+  select_col: ["Time", "Phase"] # 需要保存哪些列的meta信息, 如果为空保存所有obs信息
+  batch_size: 64
+
+evaluate:
+  emb_dim: 512
+  labels: ['Phase', 'Time']
+  umap_keys: ['Phase', 'Time']
+  batch_key: 'Phase'
+
