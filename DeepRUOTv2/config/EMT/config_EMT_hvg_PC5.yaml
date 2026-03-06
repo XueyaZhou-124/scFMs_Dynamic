@@ -1,0 +1,58 @@
+use_pinn: false
+sample_with_replacement: false
+device: cuda
+sample_size: 400
+
+data:
+  dim: 5
+  file_path: EMT_hvg_PC200.csv
+  hold_one_out: true
+  hold_out: 3
+
+exp:
+  name: EMT_hvg_PC5
+  output_dir: results
+
+model:
+  activation: leakyrelu
+  hidden_dim: 400
+  in_out_dim: 5
+  n_hiddens: 2
+  score_hidden_dim: 128
+
+pretrain:
+  epochs: 500
+  lambda_energy: 0.0
+  lambda_mass: 0.01
+  lambda_ot: 1.0
+  lr: 0.0001
+
+score_train:
+  epochs: 3001
+  lambda_penalty: 1
+  lr: 0.0001
+  score_batch_size: 400
+  sigma: 0.1
+
+train:
+  epochs: 500
+  lambda_energy: 0.01
+  lambda_initial: 0.1
+  lambda_mass: 10
+  lambda_ot: 10
+  lambda_pinn: 100
+  lr: 0.0001
+  scheduler_gamma: 0.8
+  scheduler_step_size: 100
+
+
+evaluate:
+  # for DPT pesudotime
+  cell_type_path: 'data/EMT_cell_type.csv' 
+  root_cell: 'G1' 
+  # for ODE generate tarjec
+  n_runs: 10
+  time_stpes: 100
+  sample_cells: 1000
+
+

@@ -1,0 +1,15 @@
+... storing 'cell_type' as categorical
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/weinreb_hold_one_out/pcaDPT_pca.png
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/weinreb_hold_one_out/umapDPT_umap.png
+dists.mean: 10.607253965501695 dists.std: 10.340686501733247
+Cell‐level Spearman: 0.11166651510833063 Kendall: 0.07547833396404807
+dists.mean: 11.635597637285455 dists.std: 10.685395801040787
+Cell‐level Spearman: 0.09232054600829476 Kendall: 0.06227510596838864
+dists.mean: 10.538482205423357 dists.std: 9.367257603103937
+Cell‐level Spearman: 0.13768497831524187 Kendall: 0.0928079927350806
+dists.mean: 9.34948038177617 dists.std: 8.335707493496129
+Cell‐level Spearman: 0.13980806941368218 Kendall: 0.0944633512661131
+dists.mean: 10.199817811051119 dists.std: 9.646766988076855
+Cell‐level Spearman: 0.11301126650020533 Kendall: 0.07623960983885965
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/weinreb_hold_one_out/umapest_umap.png
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/weinreb_hold_one_out/pcaest_pca.png

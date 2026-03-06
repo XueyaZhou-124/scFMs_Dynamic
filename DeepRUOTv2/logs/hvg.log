@@ -1,0 +1,18 @@
+/macroverse/public/zhouxy/scllms/.pixi/envs/deepruot/lib/python3.11/functools.py:909: ImplicitModificationWarning: Transforming to str index.
+  return dispatch(args[0].__class__)(*args, **kw)
+... storing 'cell_type' as categorical
+WARNING: saving figure to file results/Mouse_hematopoiesis_hvg_PC50/umap_DPT.png
+/macroverse/public/zhouxy/scllms/.pixi/envs/deepruot/lib/python3.11/site-packages/torch/autograd/graph.py:829: UserWarning: Attempting to run cuBLAS, but there was no current CUDA context! Attempting to set the primary context... (Triggered internally at /pytorch/aten/src/ATen/cuda/CublasHandlePool.cpp:179.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+WARNING: saving figure to file results/Mouse_hematopoiesis_hvg_PC50/umap_est.png
+   run  Spearman   Kendall  mean_dist   std_dist
+0    0  0.090347  0.060615   8.499656   9.356079
+1    1  0.091305  0.061295   8.536887   8.702639
+2    2  0.091065  0.061125   9.077457  11.098093
+3    3  0.095249  0.063899   8.935094  12.498487
+4    4  0.097963  0.065761   8.941373  11.698903
+5    5  0.098516  0.066148   8.835006  11.110302
+6    6  0.092355  0.061994   8.518209  10.683446
+7    7  0.093662  0.062870   8.191377   8.484913
+8    8  0.093343  0.062651   8.849018  11.058973
+9    9  0.095147  0.063854   8.897673  11.813030

@@ -1,0 +1,15 @@
+... storing 'cell_type' as categorical
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/Mouse_hematopoiesis_geneformer_PC20/pcaDPT_pca.png
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/Mouse_hematopoiesis_geneformer_PC20/umapDPT_umap.png
+dists.mean: 8.44952210771614 dists.std: 2.9405605623977764
+Cell‐level Spearman: 0.18151361597304597 Kendall: 0.12273174167981697
+dists.mean: 9.078569111068013 dists.std: 3.8218613914627495
+Cell‐level Spearman: 0.18478903702214164 Kendall: 0.12529814072139578
+dists.mean: 8.088895920683957 dists.std: 1.556584660642546
+Cell‐level Spearman: 0.19634309228485639 Kendall: 0.13314801013077565
+dists.mean: 8.008176098506052 dists.std: 1.651954319076074
+Cell‐level Spearman: 0.22477589850778099 Kendall: 0.15283042409090583
+dists.mean: 8.354571334557859 dists.std: 2.125331637798811
+Cell‐level Spearman: 0.1957470989211927 Kendall: 0.13252959836808792
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/Mouse_hematopoiesis_geneformer_PC20/umapest_umap.png
+WARNING: saving figure to file /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/results/Mouse_hematopoiesis_geneformer_PC20/pcaest_pca.png

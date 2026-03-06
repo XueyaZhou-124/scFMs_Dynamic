@@ -1,0 +1,51 @@
+data:
+  dim: 10
+  file_path: Mouse_hematopoiesis_uce_PC200.csv
+  hold_one_out: true
+  hold_out: 2
+device: cuda
+exp:
+  name: Mouse_hematopoiesis_uce_PC10
+  output_dir: results
+model:
+  activation: leakyrelu
+  hidden_dim: 400
+  in_out_dim: 10
+  n_hiddens: 2
+  score_hidden_dim: 128
+pretrain:
+  epochs: 500
+  lambda_energy: 0.0
+  lambda_mass: 0.01
+  lambda_ot: 1.0
+  lr: 0.0001
+sample_size: 1024
+sample_with_replacement: false
+score_train:
+  epochs: 3001
+  lambda_penalty: 1
+  lr: 0.0001
+  score_batch_size: 512
+  sigma: 0.1
+train:
+  epochs: 500
+  lambda_energy: 0.01
+  lambda_initial: 0.1
+  lambda_mass: 10
+  lambda_ot: 10
+  lambda_pinn: 100
+  lr: 0.0001
+  scheduler_gamma: 0.8
+  scheduler_step_size: 100
+use_pinn: false
+
+
+evaluate:
+  # for DPT pesudotime
+  cell_type_path: 'data/Mouse_hematopoiesis_cell_type.csv' 
+  root_cell: 'Undifferentiated' 
+  # for ODE generate tarjec
+  n_runs: 10
+  time_stpes: 100
+  sample_cells: 1000
+

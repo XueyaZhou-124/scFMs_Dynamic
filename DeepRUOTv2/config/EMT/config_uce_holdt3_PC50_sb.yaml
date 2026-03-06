@@ -1,0 +1,41 @@
+data:
+  dim: 50
+  file_path: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT/uce_holdt3_PC50.csv
+  hold_one_out: true
+  hold_out: 3
+device: cuda
+exp:
+  name: uce_holdt3_PC50_sb
+  output_dir: /macroverse/public/zhouxy/scllms/scFMs_dynamic/results/deepruot_res/EMT
+model:
+  activation: leakyrelu
+  hidden_dim: 400
+  in_out_dim: 50
+  n_hiddens: 2
+  score_hidden_dim: 128
+pretrain:
+  epochs: 500
+  lambda_energy: 0.0
+  lambda_mass: 0.01
+  lambda_ot: 1.0
+  lr: 0.0001
+sample_size: 400
+sample_with_replacement: false
+score_train:
+  epochs: 3001
+  lambda_penalty: 1
+  lr: 0.0001
+  score_batch_size: 400
+  sigma: 0.1
+train:
+  epochs: 500
+  lambda_energy: 0.01
+  lambda_initial: 0.1
+  lambda_mass: 10
+  lambda_ot: 10
+  lambda_pinn: 100
+  lr: 0.0001
+  scheduler_gamma: 0.8
+  scheduler_step_size: 100
+use_mass: false
+use_pinn: false
