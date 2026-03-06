@@ -1,10 +1,8 @@
 align_strategies:
-- identity
-- procrustes
-- ridge
+- gpa_consensus
 dataset:
   name: EMT
-  path: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/EMT
+  path: ./data/embeddings/EMT/benchmark.h5ad # integrated embeddings path
   pseudotime_key: Pseudotime
   ref_key: hvg
   test_times:
@@ -16,12 +14,12 @@ dataset:
   - 3
 dynamic_methods:
 - engine_config:
-    generate_script: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/infer_RUOT.py
+    generate_script: ./DeepRUOTv2/infer_RUOT.py
     num_runs: 10
     python_exec: python
     run_pattern: sde_run_*.npz
-    template_cfg: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/config/emt_config.yaml
-    train_script: /macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/train_RUOT.py
+    template_cfg: ./DeepRUOTv2/config/emt_config.yaml
+    train_script: ./DeepRUOTv2/train_RUOT.py
   engine_type: deepruot
   name: deepruot
   params:
@@ -35,11 +33,13 @@ dynamic_methods:
     - dot
     - sb
     - uot
+
 metrics:
-- w1tmv
 - tcvc
 - pseudotime
-models:
+- w1tmv
+
+models: # models to benchmark
 - hvg
 - genecompass
 - uce
@@ -50,7 +50,7 @@ options:
   max_workers: 6
   skip_existing: true
 paths:
-  artifacts: ./artifacts/EMT_holdt1
-  benchmark_results: ./results/EMT_holdt1
-  input_dir: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT
-  results_dir: /macroverse/public/zhouxy/scllms/scFMs_dynamic/results/dynamic_results/EMT
+  artifacts: ./artifacts/gpa/EMT_holdt0 # save alignment artifacts
+  benchmark_results: ./results/gpa/EMT_holdt0 # save benchmark results
+  input_dir: ./data/deepruot_input/EMT # save processed data for DeepRUOT
+  results_dir: ./results/dynamic_results/EMT # save dynamic results

@@ -95,7 +95,7 @@ def build_context(cfg):
     """
     顺序执行时构建共享上下文：adata、times_all、可选字段等
     """
-    data_path = os.path.join(cfg["dataset"]["path"], 'benchmark.h5ad')
+    data_path = cfg["dataset"]["path"]
     adata = sc.read_h5ad(data_path)
 
     time_key = cfg["dataset"]["time_key"]
@@ -139,7 +139,7 @@ def execute_job(cfg, job, context=None):
     # 构建数据与预处理器
     if context is None:
         # 并行或独立执行：各自读取，避免共享冲突
-        adata = sc.read_h5ad(os.path.join(ds["path"], 'benchmark.h5ad'))
+        adata = sc.read_h5ad(ds["path"])
         times_all = adata.obs[ds["time_key"]].to_numpy().astype(float)
         pseudotime_key = ds.get("pseudotime_key", None)
         pseudotime = adata.obs[pseudotime_key].to_numpy() if pseudotime_key else None
@@ -379,7 +379,7 @@ if __name__ == '__main__':
         demo_cfg = {
             "dataset": {
                 "name": "EMT",
-                "path": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/EMT",
+                "path": "./data/embeddings/EMT",
                 "ref_key": "hvg",
                 "time_key": "time",
                 'pseudotime_key': 'Pseudotime',

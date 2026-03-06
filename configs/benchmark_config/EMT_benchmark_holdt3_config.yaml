@@ -1,37 +1,56 @@
+align_strategies:
+- gpa_consensus
 dataset:
-  name: "EMT"
-  path: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/EMT"
-  ref_key: "hvg"
-  time_key: "time"
-  pseudotime_key: "Pseudotime"
-  train_times: [0, 1, 2]
-  test_times: [3]
-
-paths:
-  input_dir: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT"
-  results_dir: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/results/dynamic_results/EMT"
-  artifacts: "./artifacts/EMT"
-  benchmark_results: "./results/EMT"
-
-models: ["hvg", "genecompass", "uce", "scgpt", "scfoundation", "geneformer"]
-
+  name: EMT
+  path: ./data/embeddings/EMT/benchmark.h5ad # integrated embeddings path
+  pseudotime_key: Pseudotime
+  ref_key: hvg
+  test_times:
+  - 3
+  time_key: time
+  train_times:
+  - 0
+  - 1
+  - 2
 dynamic_methods:
-  - name: deepruot
-    engine_type: deepruot
-    params:
-      dim: [50, 10, 5, 20]
-      otmode: ["ruot", "dot", "sb", "uot"]
-    engine_config:
-      train_script: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/train_RUOT.py"
-      generate_script: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/infer_RUOT.py"
-      template_cfg: "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/config/emt_config.yaml"
-      python_exec: "python"
-      num_runs: 10
-      run_pattern: "sde_run_*.npz" # DeepRUOT 生成的文件匹配
+- engine_config:
+    generate_script: ./DeepRUOTv2/infer_RUOT.py
+    num_runs: 10
+    python_exec: python
+    run_pattern: sde_run_*.npz
+    template_cfg: ./DeepRUOTv2/config/emt_config.yaml
+    train_script: ./DeepRUOTv2/train_RUOT.py
+  engine_type: deepruot
+  name: deepruot
+  params:
+    dim:
+    - 50
+    - 10
+    - 5
+    - 20
+    otmode:
+    - ruot
+    - dot
+    - sb
+    - uot
 
-align_strategies: ["identity", "procrustes", 'ridge']
-metrics: ["w1tmv", "tcvc", "pseudotime"]
+metrics:
+- tcvc
+- pseudotime
+- w1tmv
 
+models: # models to benchmark
+- hvg
+- genecompass
+- uce
+- scgpt
+- scfoundation
+- geneformer
 options:
+  max_workers: 6
   skip_existing: true
-  max_workers: 24
+paths:
+  artifacts: ./artifacts/gpa/EMT_holdt0 # save alignment artifacts
+  benchmark_results: ./results/gpa/EMT_holdt0 # save benchmark results
+  input_dir: ./data/deepruot_input/EMT # save processed data for DeepRUOT
+  results_dir: ./results/dynamic_results/EMT # save dynamic results

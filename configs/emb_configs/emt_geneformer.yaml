@@ -3,9 +3,11 @@ task_name: EMT
 
 data:
   input_path: ./data/raw/emt.h5ad
+  external:
+    homo_path: ./data/external/homo_id.txt # homologues conversion file and ensembl id to gene symbol
 
 preprocess:
-  gene_key: name
+  gene_key: index # gene name or ensembl id
   species: human
   custom_attr_name_dict: # selected col
     "Time": "Time"
@@ -14,12 +16,12 @@ preprocess:
 embedding: 
   model_path: '/macroverse/public/zhouxy/pretrained_models/Geneformer/Geneformer-V2-104M' # huggingface pretrained model path
   setting: 'zeroshot'
-  select_col: ["Time", "Phase"] # meta info to save
+  select_col: ["Time", "Phase"] # meta info to save if not selected, save all obs infos
   batch_size: 64
 
 evaluate:
   emb_dim: 768 # hidden_dim of embedding
-  labels: ['Phase', 'Time']
+  labels: ['Phase', 'Time'] # same as select_col
   umap_keys: ['Phase', 'Time'] # for plot and eval
   batch_key: 'Phase' # for avgBIO computation
 

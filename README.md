@@ -6,11 +6,14 @@ Code for benchmark framework of single cell foundation models in celllular dynam
 
 ``` Plaintext
 .
+├── DeepRUOTv2/           # Core Dynamics methods
 ├── benchmark/            # Core evaluation logic (Alignment, Dynamics, Metrics)
 ├── configs/              # Multi-tier configurations for embeddings and benchmarks
 ├── embedding/            # Model-specific extraction wrappers to get embedding (scGPT, Geneformer, etc.)
 └── scripts/              # High-level execution scripts for the 3-step workflow
 ```
+
+Note on Dynamical Methods: The DeepRUOTv2 directory contains a customized version of the [DeepRUOTv2](https://github.com/zhenyiizhang/DeepRUOTv2) algorithm (Zhang et al.). We developed specialized inference scripts within this module to bridge foundation model embeddings with dynamical reconstruction, ensuring consistent variable extraction across all benchmarking tasks.
 
 ## 🚀 Quick Start
 
@@ -25,19 +28,49 @@ Ensure you have [Pixi](https://pixi.sh/) installed, then clone the repository an
 git clone https://github.com/XueyaZhou-124/scFMs_Dynamic.git
 cd scFMs_Dynamic
 
-# Clone the dynamical reconstruction dependency
-git clone https://github.com/zhenyiizhang/DeepRUOTv2.git
-
 # Initialize all environments via Pixi
 pixi install
-
+# Ensure you are in the project root
+export PYTHONPATH=$PYTHONPATH:$(pwd)
 ```
+
+### Preparation: Pre-trained Model Weights
+
+Our benchmark evaluates several single-cell foundation models (scFMs). Due to licensing and file size constraints, **you must download the model weights independently** before running the pipeline.
+
+#### Download Links
+
+Please download the weights for the models you wish to evaluate and store them in a local directory (e.g., `./pretrained_models/`).
+
+| Model | Source / Download Link | Reference | Used in this benchmark |
+| --- | --- | --- | --- |
+| **scGPT** | [GitHub - scGPT Human Pipeline](https://github.com/bowang-lab/scGPT) | Cui et al. (*Nature Methods*, 2024) | whole-human (recommended) |
+| **Geneformer** | [HuggingFace - Geneformer V2](https://huggingface.co/ctheodoris/Geneformer) | Theodoris et al. (*Nature*, 2023) | Geneformer-V2-104M |
+| **scFoundation** | [GitHub - scFoundation/model](https://github.com/biomap-research/scFoundation/tree/main/model) | Hao et al. (*Nature Methods*, 2024) | |
+| **UCE** | [GitHub - UCE 33M](https://www.google.com/search?q=https://huggingface.co/chen-lab/UCE) | Rosen et al. (*bioRxiv*, 2023) | 33-Layers |
+| **GeneCompass** | [GitHub - GeneCompass](https://github.com/xCompass-AI/GeneCompass) | Yang et al. (*Cell Research*, 2024) | |
+
+---
 
 ### 2. Run the Benchmark in 3 Steps
 
 We provide a demo dataset (EMT dataset) in data/raw/ for a quick walk-through.
 
 #### **Stage I: Generate Embeddings**
+**Configure Gudie**
+
+After downloading pretrained model weight, update the `model_path` field in the corresponding configuration files located in `configs/emb_configs/`.
+
+**Example (`configs/emb_configs/emt_geneformer.yaml`):**
+
+```yaml
+model: geneformer
+task_name: EMT # set save task name
+
+embedding:
+  # Update this path to your local directory
+  model_path: './pretrained_models/Geneformer-V2-104M'
+```
 
 Extract latent representations. Pixi automatically handles the environment switching for each model.
 
@@ -45,11 +78,14 @@ Extract latent representations. Pixi automatically handles the environment switc
 # Individual model examples
 pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_geneformer.yaml --model geneformer
 pixi run -e scgpt python scripts/all_embedding.py --config ./configs/emb_configs/emt_scgpt.yaml --model scgpt
-pixi run -e scfoundation python scripts/all_embedding.py --config ./configs/emb_configs/emt_scfoundation --model scfoundation
 
 # To run all models sequentially using the provided shell script:
 bash scripts/extract_all_embeddings.sh
+```
 
+Upon successful execution, the generated embeddings and processed AnnData objects will be saved to:
+```
+data/embeddings/{dataset_name}/{model_name}_adata_eval.h5ad
 ```
 
 #### **Stage II: Integrate Embeddings**
@@ -58,14 +94,13 @@ Combine the individual model outputs into a unified `AnnData` (.h5ad) object for
 
 ```bash
 pixi run python scripts/integrate_embedding.py \
-    --input_dir results/temp_embeddings/ \
-    --output_file data/processed/integrated_demo.h5ad
-
+    --input_dir data/embeddings/{task_name}/ \
+    --output_file data/embeddings/{task_name}/benchmark.h5ad
 ```
 
 #### **Stage III: Trajectory Inference, Alignment & Evaluation**
 
-Run the core benchmark engine to trajectory inference, alignment & evaluattion.
+Run the core benchmark engine to trajectory inference with DeepRUOTv2, alignment & evaluattion.
 
 ```bash
 # Backtracking
@@ -82,7 +117,8 @@ pixi run python -e deepruot scripts/benchmark_gpa.py --config configs/benchmark_
 Summary metrics and figures (corresponding to Fig. 2 in the manuscript) are saved in `results/`:
 
 ```bash
-cat results/Dataset/benchmark_summary.csv
-
+cat ./results/gpa/EMT_holdt0/w1tmv.csv
+cat ./results/gpa/EMT_holdt0/pseudotime.csv
+cat ./results/gpa/EMT_holdt0/tcvc.csv
 ```
 
