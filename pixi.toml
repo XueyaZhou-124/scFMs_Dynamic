@@ -1,0 +1,150 @@
+[workspace]
+channels = ["conda-forge", "bioconda"]
+name = "scllms"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[pypi-options]
+index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+
+[activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
+
+[pypi-dependencies]
+plotly = "*"
+wandb = "*"
+scanpy = "*"
+seaborn = ">=0.13.2, <0.14"
+scib = "*"
+pandas = "*"
+anndata = "*"
+sparse = "*"
+venn = "*"
+python_dotplot = "==0.0.1"
+ipywidgets = "*"
+kaleido = "==0.2.1"
+upsetplot = "*"
+ipdb = "*"
+tensorboard = "*"
+
+[dependencies]
+python = ">3.10,<=3.11"
+jupyterlab = ">=4.4.5,<5"
+pixi-kernel = ">=0.6.4,<0.7"
+ipykernel = ">=6.29.5,<7"
+
+[feature.scgpt.pypi-dependencies]
+scgpt = "*"
+torch_geometric = "*"
+torchtext = "==0.18.0"
+
+[feature.uce.pypi-dependencies]
+numpy = "==1.26.4"
+accelerate = "==0.24.0"
+requests = "==2.32.4"
+scanpy = "==1.10.2"
+urllib3 = "==2.5.0"
+tqdm = "==4.67.1"
+
+[feature.torch23.pypi-dependencies]
+torch = ">=2.3.0,<2.4.0"
+
+[feature.optuna.pypi-dependencies]
+optuna = "*"
+optuna-integration = { version = ">=3.6.0, <4" }
+
+[feature.torch211.pypi-dependencies]
+torch = "==2.1.1"
+
+[feature.genecompass.activation.env]
+PYTHONPATH = "/macroverse/public/zhouxy/pretrained_models/GeneCompass/:$PYTHONPATH"
+
+[feature.genecompass.pypi-dependencies]
+ipywidgets = "*"
+accelerate = ">=0.32.1"
+datasets = "==2.21.0"
+pyarrow = "==15.0.0"
+anndata = ">=0.9"
+hyperopt = ">=0.2"
+loompy = ">=3.0"
+matplotlib = ">=3.7"
+numpy = ">=1.23"
+packaging = ">=23.0"
+pandas = ">=2.0"
+pytz = ">=2023.0"
+ray = ">=2.6"
+scanpy = ">=1.9"
+scikit-learn = ">=1.2"
+scipy = ">=1.10"
+seaborn = ">=0.12"
+setuptools = ">=65.6"
+tdigest = ">=0.5.2"
+torch = ">=1.13.1"
+torchvision = ">=0.14.1"
+tqdm = ">=4.65"
+transformers = "==4.30.0"
+
+[feature.geneformer.pypi-dependencies]
+geneformer = { path = "/macroverse/public/zhouxy/pretrained_models/Geneformer", editable = true}
+anndata = ">=0.9"
+bitsandbytes = ">=0.45.5"
+datasets = "==2.21.0"
+pyarrow = "==15.0.0"
+hyperopt = ">=0.2"
+loompy = ">=3.0"
+matplotlib = ">=3.7"
+numpy = ">=1.23"
+optuna = ">=3.6"
+optuna-integration = ">=3.6"
+packaging = ">=23.0"
+pandas = ">=2.0"
+peft = ">=0.11.1"
+pytz = ">=2023.0"
+ray = ">=2.6"
+scanpy = ">=1.9"
+scikit-learn = ">=1.2"
+scipy = ">=1.10"
+seaborn = ">=0.12"
+setuptools = ">=65.6"
+statsmodels = ">=0.14"
+tdigest = ">=0.5.2"
+tensorboard = ">=2.15"
+torch = ">=2.0.1"
+tqdm = ">=4.65"
+transformers = "==4.46"
+rnanorm = "*"
+
+[feature.geneformer.dependencies]
+libstdcxx-ng = ">=12"
+
+[feature.deepspeed.pypi-dependencies]
+deepspeed = "*"
+
+[feature.scfoundation.pypi-dependencies]
+numpy = "==1.24.2"
+einops = "*"
+local_attention = "*"
+
+[feature.deepruot.pypi-dependencies]
+numpy = "<2"
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
+torchdiffeq = "*"
+torchsde = "*"
+pot = "*"
+phate = "*"
+pyyaml = "*"
+ipywidgets = "*"
+geomloss = "*"
+scvelo = "*"
+harmonypy = "*"
+
+[environments]
+scgpt = ["scgpt", "optuna", "torch23"]
+uce = ["torch211", "uce"]
+geneformer = ["torch23", "optuna", "geneformer", "deepspeed"]
+genecompass = ["torch23", "optuna", "genecompass", "deepspeed"]
+scfoundation = ["torch23", "scfoundation"]
+deepruot = ["deepruot"]
+
