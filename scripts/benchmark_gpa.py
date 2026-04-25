@@ -5,7 +5,12 @@ import pandas as pd
 from itertools import product
 import scanpy as sc
 import sys
-sys.path.append('/macroverse/public/zhouxy/scllms/scFMs_dynamic')
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from benchmark.preprocessor import EmbeddingPreprocessor
 from benchmark.dynamic import DeepRUOTEngine
 from benchmark.evaluate_utils import AlignmnetEvaluator, load_runs_npz
@@ -57,6 +62,28 @@ def validate_config(cfg):
     return cfg
 
 
+def validate_adata_obsm_for_benchmark(cfg, adata):
+    """
+    在跑大量 job 之前检查 benchmark.h5ad 是否包含 ref 与各 model 的 obsm。
+    避免每个组合都报一次「X_xxx 不存在于 adata.obsm」。
+    """
+    ds = cfg["dataset"]
+    ref_obsm = f"X_{ds['ref_key']}"
+    need = {ref_obsm}
+    for m in cfg["models"]:
+        need.add(f"X_{m}")
+    missing = sorted(k for k in need if k not in adata.obsm)
+    if missing:
+        available = sorted(
+            str(k) for k in adata.obsm.keys() if str(k).startswith("X_")
+        )
+        raise ValueError(
+            "benchmark AnnData 缺少当前配置所需的 obsm："
+            f"{missing}\n以 X_ 开头的 obsm：{available}\n"
+            "请调整 cfg['models'] / dataset.ref_key 与整合后的 h5ad 一致，或重新运行 integrate_embedding。"
+        )
+
+
 def expand_jobs(cfg):
     """
     返回所有组合的列表，每个条目包含 model + dynamic_method + method_params
@@ -91,12 +118,14 @@ def has_existing_runs(res_dir, pattern, expected_min=1):
     return len(files) >= expected_min
 
 
-def build_context(cfg):
+def build_context(cfg, adata=None):
     """
-    顺序执行时构建共享上下文：adata、times_all、可选字段等
+    顺序执行时构建共享上下文：adata、times_all、可选字段等。
+    若传入 adata（例如 run_benchmark 已校验并复用），则不再读盘。
     """
-    data_path = cfg["dataset"]["path"]
-    adata = sc.read_h5ad(data_path)
+    if adata is None:
+        adata = sc.read_h5ad(cfg["dataset"]["path"])
+    validate_adata_obsm_for_benchmark(cfg, adata)
 
     time_key = cfg["dataset"]["time_key"]
     times_all = adata.obs[time_key].to_numpy().astype(float)
@@ -244,11 +273,10 @@ def execute_job(cfg, job, context=None):
         # 如果 gpa align，在这里构建所有 model 的共识空间作为参考空间
         if align_name == 'gpa_consensus':
             aligner = make_aligner(align_name)
-            # 用所有 model 的 embedding gpa 作为共识空间
-            allmodels = ['hvg', 'geneformer', 'scgpt', 'scfoundation', 'uce', 'genecompass']
-            # prepare all z
-            for model in allmodels:
-                emb_prep.fit_embedding(model_key=model, k=dim)
+            # 与 cfg['models'] 一致，避免整合子集时仍硬编码全模型名
+            allmodels = list(cfg["models"])
+            for _m in allmodels:
+                emb_prep.fit_embedding(model_key=_m, k=dim)
             Z_train_allmodels = {key: emb_prep.get_Z(key, split='train') for key in allmodels}
             aligner.fit(Z_train_allmodels) 
             aligner.save(os.path.join(art_dir_model, 'gpa.joblib'))
@@ -311,9 +339,15 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
     cfg = validate_config(load_benchmark_config(benchmark_config))
     jobs = expand_jobs(cfg)
 
+    adata0 = sc.read_h5ad(cfg["dataset"]["path"])
+    validate_adata_obsm_for_benchmark(cfg, adata0)
+
     # 如果未显式传入，读取配置中的 options.max_workers
     if max_workers is None:
         max_workers = int(cfg.get("options", {}).get("max_workers", 1))
+
+    if max_workers > 1:
+        del adata0
 
     # 如果通过参数传入 save_path，则覆盖配置文件中的 benchmark_results
     if save_path is not None:
@@ -331,8 +365,8 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
             all_timing.extend(timing_rows)
 
     if max_workers <= 1:
-        # 顺序：构建共享上下文，提高效率
-        context = build_context(cfg)
+        # 顺序：构建共享上下文，提高效率（复用已校验的 adata）
+        context = build_context(cfg, adata=adata0)
         for job in jobs:
             rows_by_metric, timing_rows = execute_job(cfg, job, context=context)
             merge_rows(rows_by_metric, timing_rows)
@@ -379,18 +413,18 @@ if __name__ == '__main__':
         demo_cfg = {
             "dataset": {
                 "name": "EMT",
-                "path": "./data/embeddings/EMT",
+                "path": str(_REPO_ROOT / "data" / "embeddings" / "EMT" / "benchmark.h5ad"),
                 "ref_key": "hvg",
                 "time_key": "time",
-                'pseudotime_key': 'Pseudotime',
+                "pseudotime_key": "Pseudotime",
                 "train_times": [0, 1, 2],
-                "test_times": [3]
+                "test_times": [3],
             },
             "paths": {
-                "input_dir": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/deepruot_input/EMT",
-                "results_dir": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/results/dynamic_results/EMT",
-                "artifacts": "./artifacts/EMT",
-                "benchmark_results": "./results/EMT"
+                "input_dir": str(_REPO_ROOT / "data" / "deepruot_input" / "EMT"),
+                "results_dir": str(_REPO_ROOT / "results" / "dynamic_results" / "EMT"),
+                "artifacts": str(_REPO_ROOT / "artifacts" / "EMT"),
+                "benchmark_results": str(_REPO_ROOT / "results" / "EMT"),
             },
             "models": ["hvg", "genecompass", "uce", "scgpt", "scfoundation", "geneformer"],
             "dynamic_methods": [
@@ -402,9 +436,11 @@ if __name__ == '__main__':
                         "otmode": ["ruot", "dot", "sb", "uot"]
                     },
                     "engine_config": {
-                        "train_script": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/train_RUOT.py",
-                        "generate_script": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/infer_RUOT.py",
-                        "template_cfg": "/macroverse/public/zhouxy/scllms/scFMs_dynamic/DeepRUOTv2/config/emt_config.yaml",
+                        "train_script": str(_REPO_ROOT / "DeepRUOTv2" / "train_RUOT.py"),
+                        "generate_script": str(_REPO_ROOT / "DeepRUOTv2" / "infer_RUOT.py"),
+                        "template_cfg": str(
+                            _REPO_ROOT / "DeepRUOTv2" / "config" / "emt_config.yaml"
+                        ),
                         "python_exec": "python",
                         "num_runs": 10,
                         "run_pattern": "sde_run_*.npz" # DeepRUOT 生成的文件匹配

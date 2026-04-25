@@ -1,11 +1,60 @@
-data/
+# --- data & outputs (large / reproducible locally) ---
+# Keep data/raw/ as the documented layout locally; do not commit .h5ad here (GitHub 100MB limit).
+# data/embeddings/、data/processed/、data/deepruot_input/、data/external/ 等仍被 data/* 忽略，勿提交。
+data/*
+!data/raw/
+!data/raw/**
 results/
 artifacts/
+
+# User-downloaded weights (never commit)
+pretrained_models/
+
+# AnnData / single-cell & tables (including data/raw; obtain per README)
 *.h5ad
-*.pth
+*.loom
+*.zarr/
+
+# ML checkpoints & weights
 *.ckpt
+*.pth
+*.pt
+*.pt2
+*.safetensors
+*.bin
+*.onnx
+*.pb
+*.weights
+*.index
+
+# numpy / serialization
 *.npy
+*.npz
+*.pkl
+*.pickle
+*.joblib
+
+# tabular exports (often huge); remove this line if you need small CSVs in git
 *.csv
+
+# archives (datasets / dumps)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+# HDF5
+*.h5
+*.hdf5
+
+# logs & experiment trackers
+wandb/
+mlruns/
+tensorboard*/
+runs/
+lightning_logs/
 
 # environment
 .pixi/
@@ -14,3 +63,5 @@ __pycache__/
 .DS_Store
 __MACOSX/
 
+# DeepRUOT training / run logs (regenerated locally)
+DeepRUOTv2/logs/

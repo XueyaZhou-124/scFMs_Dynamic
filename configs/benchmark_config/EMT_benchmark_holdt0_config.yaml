@@ -41,10 +41,7 @@ metrics:
 
 models: # models to benchmark
 - hvg
-- genecompass
-- uce
 - scgpt
-- scfoundation
 - geneformer
 options:
   max_workers: 6

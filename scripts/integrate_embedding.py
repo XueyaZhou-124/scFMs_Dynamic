@@ -1,50 +1,157 @@
-import scanpy as sc
 import os
 import argparse
+import numpy as np
+import pandas as pd
+import scanpy as sc
+
+
+def _parse_model_keys(arg_models):
+    """Normalize model names: lower/strip, drop empty."""
+    if not arg_models:
+        return None
+    out = [x.strip().lower() for x in arg_models if x and str(x).strip()]
+    return out or None
+
+
+def _resolve_time_col(adata_obj, time_key: str) -> str:
+    """Resolve which obs column to use for alignment (default: time, fallback Time)."""
+    tk = time_key.strip()
+    if tk in adata_obj.obs.columns:
+        return tk
+    if tk == "time" and "Time" in adata_obj.obs.columns:
+        return "Time"
+    raise KeyError(
+        f"time column {tk!r} not found in obs. "
+        f"Available keys include: {list(adata_obj.obs.columns)[:40]}"
+    )
+
+
+def _ensure_time_column(adata, time_key: str) -> None:
+    """
+    Guarantee obs['time'] exists for downstream benchmark configs.
+    If missing, copy from the column indicated by time_key (after resolve), then drop the source column if it was not already 'time'.
+    """
+    if "time" in adata.obs.columns:
+        return
+    src = _resolve_time_col(adata, time_key)
+    adata.obs["time"] = pd.to_numeric(adata.obs[src], errors="coerce")
+    if src != "time":
+        adata.obs.drop(columns=[src], inplace=True)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Integrate embeddings from multiple models into a single AnnData object.")
-    parser.add_argument('--data_name', type=str, required=True, help='Name of the dataset (used for output file naming).')
-    parser.add_argument('--models', type=str, nargs='+', default= 'all', help='List of model names whose embeddings to integrate.')
-    parser.add_argument('--cell_type_key', type=str, default=None, help='Cell type key in AnnData.obs for matching samples.')
-    parser.add_argument('--time_key', type=str, default='time', help='Time key in AnnData.obs for matching samples if cell_type_key is not provided.')
-    parser.add_argument('--time_dict', type=str, default=None, help='Optional dict for mapping time values to integers.')
+    parser = argparse.ArgumentParser(
+        description="Integrate per-model *_adata_eval.h5ad into one benchmark.h5ad."
+    )
+    parser.add_argument(
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Directory with *_adata_eval.h5ad (e.g. data/embeddings/EMT/)",
+    )
+    parser.add_argument(
+        "--output_file",
+        type=str,
+        required=True,
+        help="Output path for merged AnnData, e.g. data/embeddings/EMT/benchmark.h5ad",
+    )
+    parser.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        help="Optional list of model keys to include (e.g. hvg geneformer). Default: all *_adata_eval.h5ad in input_dir",
+    )
+    parser.add_argument(
+        "--ref_key",
+        type=str,
+        default="hvg",
+        help="Reference model; requires {ref_key}_adata_eval.h5ad and defines cell order",
+    )
+    parser.add_argument(
+        "--cell_type_key",
+        type=str,
+        default=None,
+        help="If set, assert obs[cell_type_key] matches across models",
+    )
+    parser.add_argument(
+        "--time_key",
+        type=str,
+        default="time",
+        help="obs column used to align cells across models; if output has no 'time', this column is copied to 'time' (default tries 'time' then 'Time')",
+    )
 
     args = parser.parse_args()
 
-    data_name = args.data_name
-    data_path = '/macroverse/public/zhouxy/scllms/scFMs_dynamic/data/embeddings/' + data_name
-    models = ['hvg', 'genecompass','uce', 'scgpt', 'scfoundation', 'geneformer']
+    input_dir = os.path.normpath(args.input_dir)
+    output_file = os.path.normpath(args.output_file)
+    out_dir = os.path.dirname(output_file)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
-    if args.models != 'all':
-        models = args.models
+    if not os.path.isdir(input_dir):
+        raise NotADirectoryError(f"Not a directory: {input_dir}")
 
-    
-    cell_type_key = args.cell_type_key
-    time_key =  args.time_key
-    time_dict = args.time_dict
+    all_files = [
+        f
+        for f in os.listdir(input_dir)
+        if f.endswith("_adata_eval.h5ad")
+    ]
 
-    allembs = [os.path.join(data_path, i) for i in os.listdir(data_path) if '_eval.h5ad' in i]
-    ref_key = 'hvg'
-    adata = sc.read_h5ad(os.path.join(data_path, ref_key+'_adata_eval.h5ad')) # 以hvg作为参考
-    adata.obsm['X_hvg'] = adata.obsm['X_emb']
-    del adata.obsm['X_emb']
+    def key_from_filename(fn):
+        return fn[: -len("_adata_eval.h5ad")].lower()
 
-    if time_dict is not None:
-        adata.obs['time'] = [time_dict[i] for i in adata.obs[time_key]]
+    file_by_key = {key_from_filename(f): os.path.join(input_dir, f) for f in all_files}
+    want = _parse_model_keys(args.models)
 
-    for emb_path in allembs:    
-        if ref_key not in emb_path:
-            adata_key = sc.read_h5ad(emb_path)
-            if cell_type_key is not None:
-                assert (adata_key.obs[cell_type_key].values == adata.obs[cell_type_key].values).all() # 确保样本配对
-            else:
-                assert (adata_key.obs['time'].values == adata.obs['time'].values).all() # 确保样本配对
+    if want is not None:
+        missing = [k for k in want if k not in file_by_key]
+        if missing:
+            raise FileNotFoundError(
+                f"Missing model files in {input_dir}: {missing}. Found keys: {sorted(file_by_key)}"
+            )
+        keys_to_merge = [k for k in want if k in file_by_key]
+    else:
+        keys_to_merge = sorted(file_by_key.keys())
 
-            key = os.path.basename(emb_path).replace('_adata_eval.h5ad', '')
-            print('hidden dim of', key, adata_key.obsm['X_emb'].shape[1])
-            adata.obsm[f'X_{key}'] = adata_key.obsm['X_emb']
+    ref_key = args.ref_key.strip().lower()
+    if ref_key not in file_by_key:
+        raise FileNotFoundError(
+            f"Reference {ref_key}_adata_eval.h5ad not in {input_dir}. "
+            f"Found: {sorted(file_by_key)}"
+        )
+    if ref_key not in keys_to_merge:
+        raise ValueError(
+            f"ref_key {ref_key!r} must be included; use --models to list it or omit --models"
+        )
 
-    adata.write_h5ad(os.path.join(data_path, 'benchmark.h5ad'))
-    print('save to', os.path.join(data_path, 'benchmark.h5ad'))
+    ref_path = file_by_key[ref_key]
+    adata = sc.read_h5ad(ref_path)
+    adata.obsm[f"X_{ref_key}"] = adata.obsm["X_emb"]
+    del adata.obsm["X_emb"]
+
+    time_col = _resolve_time_col(adata, args.time_key)
+    ref_time_vec = np.asarray(adata.obs[time_col].to_numpy())
+
+    for key in keys_to_merge:
+        if key == ref_key:
+            continue
+        emb_path = file_by_key[key]
+        adata_key = sc.read_h5ad(emb_path)
+        if args.cell_type_key is not None:
+            assert (
+                adata_key.obs[args.cell_type_key].values
+                == adata.obs[args.cell_type_key].values
+            ).all()
+        else:
+            other_time_col = _resolve_time_col(adata_key, args.time_key)
+            assert (
+                adata_key.obs[other_time_col].values == adata.obs[time_col].values
+            ).all()
+
+        print("hidden dim of", key, adata_key.obsm["X_emb"].shape[1])
+        adata.obsm[f"X_{key}"] = adata_key.obsm["X_emb"]
+
+    _ensure_time_column(adata, args.time_key)
+
+    adata.write_h5ad(output_file)
+    print("save to", output_file)

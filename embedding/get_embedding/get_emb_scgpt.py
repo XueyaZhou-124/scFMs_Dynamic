@@ -140,7 +140,10 @@ class DataProcessor:
         """Preprocess AnnData using scGPT preprocessor"""
         if species != 'human':
             print('homologues convert')
-            assert os.path.exists(homo_path), f'species is not human, {homo_path} is not exist'
+            assert homo_path is not None and os.path.exists(homo_path), (
+                "species is not human, but homo_path is missing or invalid: "
+                f"{homo_path}"
+            )
 
             print(f"Loading homologues data from {homo_path}")
             homo_df = pd.read_table(homo_path) # 人同源基因转换
@@ -196,10 +199,11 @@ def run(config):
     config_scgpt = Config()
     config_scgpt.load_model = config['embedding']['model_path']
     config_scgpt.batch_size = config['embedding']['batch_size']
-    species = config['preprocess']['species']
+    species = config['preprocess'].get('species', 'human')
     config_scgpt.gene_key = config['preprocess']['gene_key']
-    
-    homo_path = config['external'].get('homo_path', None)
+
+    # external section is optional; only needed for non-human homolog mapping.
+    homo_path = config.get('external', {}).get('homo_path', None)
     save_path = config['embedding']['output_path']
 
     batch_key = config['preprocess'].get('batch_key', 'Time')

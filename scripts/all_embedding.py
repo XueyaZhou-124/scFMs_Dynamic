@@ -5,7 +5,11 @@ import importlib
 import warnings
 warnings.filterwarnings("ignore")
 import sys
-sys.path.append('..')
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 STRATEGY_REGISTRY = {
     "genecompass": "embedding.base.strategy_genecompass.GeneCompassStrategy",
@@ -100,10 +104,12 @@ def main():
     elif args.step == "evaluate":
         strategy.evaluate()
     elif args.step == "all":
+        eval_output = f"{config['evaluate']['output_prefix']}adata_eval.h5ad"
         if not os.path.exists(config['preprocess']['output_path']):
             strategy.preprocess()
         if not os.path.exists(config['embedding']['output_path']):
             strategy.get_embedding()
+        if not os.path.exists(eval_output):
             strategy.evaluate()
 
 

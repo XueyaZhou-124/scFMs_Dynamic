@@ -2,18 +2,18 @@ model: scfoundation
 task_name: EMT
 
 data:
-  input_path: data/raw/EMT/raw.h5ad
+  input_path: ./data/raw/emt.h5ad
 
 external:
-  homo_path: /personal/scFMs_dynamic/data/external/scFoundation/homo_id.txt # 同源基因转换的数据，只有当物种非人时使用
-  gene_list_path: /personal/scFMs_dynamic/data/external/scFoundation/OS_scRNA_gene_index.19264.tsv # scFoundation特有
+  homo_path: ./data/external/scFoundation/homo_id.txt
+  gene_list_path: ./data/external/scFoundation/OS_scRNA_gene_index.19264.tsv
 
 preprocess:
-  gene_key: name
+  gene_key: index
   species: human
 
 embedding: # 参考scfoundation参数设置
-  model_path: '/macroverse/public/zhouxy/pretrained_models/scFoundation/model/models/models.ckpt' # ckpt path
+  model_path: ./pretrained_models/scFoundation/model/models/models.ckpt
   pre_normalized: F # 数据是否进行过normalized
   select_col: ["Time", "Phase"] # 需要保存哪些列的meta信息, 如果为空保存所有obs信息
 

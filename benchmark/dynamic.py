@@ -119,11 +119,16 @@ class DeepRUOTEngine(BaseRunner):
         ensure_dir(out_dir)
 
         # 数据写入
-        data_dir = data.get("data_dir") or ensure_dir(os.path.join(out_dir, "train_data"))
-        data_file = os.path.join(data_dir, self.file_layout["data_file_name"])
+        data_dir_raw = data.get("data_dir") or ensure_dir(os.path.join(out_dir, "train_data"))
+        data_dir = os.path.abspath(os.path.expanduser(data_dir_raw))
+        data_file = os.path.abspath(
+            os.path.join(data_dir, self.file_layout["data_file_name"])
+        )
         self._write_dataset_csv(Z, t, data_file)
 
         dim = Z.shape[1]
+        # DeepRUOT train_RUOT / infer_RUOT join(DATA_DIR, file_path)；file_path 必须是绝对路径，
+        # 否则会错误拼到 DeepRUOTv2/data/ 下。
         overrides = {
             "exp": {"output_dir": out_dir},
             "data": {"file_path": data_file, "dim": int(dim)},

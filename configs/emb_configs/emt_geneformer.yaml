@@ -9,19 +9,15 @@ data:
 preprocess:
   gene_key: index # gene name or ensembl id
   species: human
-  custom_attr_name_dict: # selected col
-    "Time": "Time"
-    "Phase": "Phase"
 
 embedding: 
-  model_path: '/macroverse/public/zhouxy/pretrained_models/Geneformer/Geneformer-V2-104M' # huggingface pretrained model path
+  # Point to your local weights (e.g. after downloading Geneformer V2 104M)
+  model_path: ./pretrained_models/Geneformer/Geneformer-V2-104M
   setting: 'zeroshot'
-  select_col: ["Time", "Phase"] # meta info to save if not selected, save all obs infos
   batch_size: 64
 
 evaluate:
   emb_dim: 768 # hidden_dim of embedding
-  labels: ['Phase', 'Time'] # same as select_col
   umap_keys: ['Phase', 'Time'] # for plot and eval
   batch_key: 'Phase' # for avgBIO computation
 

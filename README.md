@@ -47,14 +47,14 @@ Please download the weights for the models you wish to evaluate and store them i
 | **scGPT** | [GitHub - scGPT Human Pipeline](https://github.com/bowang-lab/scGPT) | Cui et al. (*Nature Methods*, 2024) | whole-human (recommended) |
 | **Geneformer** | [HuggingFace - Geneformer V2](https://huggingface.co/ctheodoris/Geneformer) | Theodoris et al. (*Nature*, 2023) | Geneformer-V2-104M |
 | **scFoundation** | [GitHub - scFoundation/model](https://github.com/biomap-research/scFoundation/tree/main/model) | Hao et al. (*Nature Methods*, 2024) | |
-| **UCE** | [GitHub - UCE 33M](https://www.google.com/search?q=https://huggingface.co/chen-lab/UCE) | Rosen et al. (*bioRxiv*, 2023) | 33-Layers |
+| **UCE** | [Hugging Face - UCE 33M](https://huggingface.co/chen-lab/UCE) | Rosen et al. (*bioRxiv*, 2023) | 33-Layers |
 | **GeneCompass** | [GitHub - GeneCompass](https://github.com/xCompass-AI/GeneCompass) | Yang et al. (*Cell Research*, 2024) | |
 
 ---
 
 ### 2. Run the Benchmark in 3 Steps
 
-We provide a demo dataset (EMT dataset) in data/raw/ for a quick walk-through.
+We provide a demo dataset (EMT) for a quick walk-through: place the processed h5ad at `./data/raw/emt.h5ad` (or update the `input_path` fields in `configs/emb_configs/` to match your layout).
 
 #### **Stage I: Generate Embeddings**
 **Configure Gudie**
@@ -69,8 +69,12 @@ task_name: EMT # set save task name
 
 embedding:
   # Update this path to your local directory
-  model_path: './pretrained_models/Geneformer-V2-104M'
+  model_path: './pretrained_models/Geneformer/Geneformer-V2-104M'
 ```
+
+For **GeneCompass**, some imports expect the upstream [GeneCompass](https://github.com/xCompass-AI/GeneCompass) repository on `PYTHONPATH` (see comments in `pixi.toml` for `export PYTHONPATH=...`).
+
+For **Geneformer (Pixi)**, the `geneformer` feature installs the `geneformer` package from PyPI. If you rely on a local editable checkout instead, override that dependency in your environment or `pixi.toml` as needed.
 
 Extract latent representations. Pixi automatically handles the environment switching for each model.
 
@@ -78,6 +82,7 @@ Extract latent representations. Pixi automatically handles the environment switc
 # Individual model examples
 pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_geneformer.yaml --model geneformer
 pixi run -e scgpt python scripts/all_embedding.py --config ./configs/emb_configs/emt_scgpt.yaml --model scgpt
+pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_hvg.yaml --model hvg
 
 # To run all models sequentially using the provided shell script:
 bash scripts/extract_all_embeddings.sh
@@ -93,9 +98,12 @@ data/embeddings/{dataset_name}/{model_name}_adata_eval.h5ad
 Combine the individual model outputs into a unified `AnnData` (.h5ad) object for downstream comparison.
 
 ```bash
-pixi run python scripts/integrate_embedding.py \
-    --input_dir data/embeddings/{task_name}/ \
-    --output_file data/embeddings/{task_name}/benchmark.h5ad
+pixi run -e deepruot python scripts/integrate_embedding.py \
+    --input_dir data/embeddings/EMT/ \
+    --output_file data/embeddings/EMT/benchmark.h5ad \
+    --ref_key hvg \
+    --time_key time
+# Optional: restrict models, e.g.  --models hvg geneformer scgpt
 ```
 
 #### **Stage III: Trajectory Inference, Alignment & Evaluation**
@@ -104,11 +112,11 @@ Run the core benchmark engine to trajectory inference with DeepRUOTv2, alignment
 
 ```bash
 # Backtracking
-pixi run python -e deepruot scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt0_config.yaml
+pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt0_config.yaml
 # Interpolation （hold hot timepoint 1）
-pixi run python -e deepruot scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt1_config.yaml
+pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt1_config.yaml
 # Extrapolation
-pixi run python -e deepruot scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt3_config.yaml
+pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt3_config.yaml
 
 ```
 

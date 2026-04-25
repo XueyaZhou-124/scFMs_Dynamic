@@ -2,7 +2,7 @@ model: hvg
 task_name: EMT
 
 data:
-  input_path: /macroverse/public/zhouxy/scllms/scFMs_dynamic/data/raw/EMT/raw.h5ad
+  input_path: ./data/raw/emt.h5ad
 
 embedding: 
   n_top_genes: 2000
@@ -12,4 +12,3 @@ evaluate:
   emb_dim: 2000 # hidden_dim of embedding
   umap_keys: ['Phase', 'Time'] # for plot and eval
   batch_key: 'Phase' # for avgBIO computation
-

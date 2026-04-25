@@ -56,8 +56,8 @@ optuna-integration = { version = ">=3.6.0, <4" }
 [feature.torch211.pypi-dependencies]
 torch = "==2.1.1"
 
-[feature.genecompass.activation.env]
-PYTHONPATH = "/macroverse/public/zhouxy/pretrained_models/GeneCompass/:$PYTHONPATH"
+# GeneCompass: clone the official repo and prepend it to PYTHONPATH in your shell
+# if imports fail, e.g.  export PYTHONPATH="/path/to/GeneCompass:$PYTHONPATH"
 
 [feature.genecompass.pypi-dependencies]
 ipywidgets = "*"
@@ -85,7 +85,7 @@ tqdm = ">=4.65"
 transformers = "==4.30.0"
 
 [feature.geneformer.pypi-dependencies]
-geneformer = { path = "/macroverse/public/zhouxy/pretrained_models/Geneformer", editable = true}
+geneformer = "*"
 anndata = ">=0.9"
 bitsandbytes = ">=0.45.5"
 datasets = "==2.21.0"
