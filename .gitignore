@@ -1,5 +1,5 @@
 # --- data & outputs (large / reproducible locally) ---
-# Keep data/raw/ as the documented layout locally; do not commit .h5ad here (GitHub 100MB limit).
+# Demo: only track slim `data/raw/emt.h5ad` (under GitHub size limit); other .h5ad stay ignored.
 # data/embeddings/、data/processed/、data/deepruot_input/、data/external/ 等仍被 data/* 忽略，勿提交。
 data/*
 !data/raw/
@@ -10,8 +10,9 @@ artifacts/
 # User-downloaded weights (never commit)
 pretrained_models/
 
-# AnnData / single-cell & tables (including data/raw; obtain per README)
+# AnnData / single-cell & tables (exception: slim demo only)
 *.h5ad
+!data/raw/emt.h5ad
 *.loom
 *.zarr/
 
