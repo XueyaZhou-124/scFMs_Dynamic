@@ -30,12 +30,12 @@ def parse_args():
 
 
 def run(config):
-    # 从 config 构造一个 argparse.Namespace 对象
+    # Build argparse.Namespace from config
     args = argparse.Namespace()
     task_name = config['task_name']
     model = config['model']
     args.model_path = config['embedding']['model_path']
-    args.tokenized_dataset = config['embedding']['dataset_path'] # 上一步生成的tokenized_dataset
+    args.tokenized_dataset = config['embedding']['dataset_path']  # tokenized dataset from preprocess
     args.output_path = config['embedding']['output_path']
     args.setting = config['embedding']['setting']
     args.select_col = config['embedding'].get('select_col', None)
@@ -43,7 +43,7 @@ def run(config):
     args.cell_type_key = config['embedding'].get('cell_type_key', 'cell_type')
 
     print(args)
-    main(args) # 调用原本的主函数
+    main(args)
 
 
 def tokenize():
@@ -86,14 +86,13 @@ def main(args):
                             emb_mode='cls', 
                             emb_label=select_col, 
                             forward_batch_size = batch_size, 
-                            max_ncells = None, # 提取所有细胞embedding
+                            max_ncells = None,  # all cells
                             nproc=6,
                             labels_to_plot= select_col)
         embs = embx.extract_embs(model_directory = model_directory, # 
                                 input_data_file = datadir, 
                                 output_directory = output_directory, 
                                 output_prefix = output_prefix)
-        # 对emb按cell_id重新排列
         embs = embs.sort_values('cell_id')
         embs.to_csv(args.output_path)
 

@@ -291,7 +291,7 @@ def run(config) -> None:
     token_dict: Dict[str, int] = load_pickle_dict(gene_token_dict_path) # ensembl id to token
 
     logging.info("Mapping gene IDs to symbols and filtering unmapped genes")
-    # 如果基因key不是ensembleid进行转换
+    # Map symbols to Ensembl if gene_key is not already Ensembl-like
     if gene_key.lower() not in ["ensemblid", "ensembl_id", "ensembl_id_mouse", "ensembl_id_human"]:
         adata = map_gene_symbols_to_ids(adata, gene_id_to_name, gene_key)
     else:

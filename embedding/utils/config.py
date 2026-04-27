@@ -1,8 +1,7 @@
 
 def deep_get(cfg: dict, key_path: str, sep: str = "."):
     """
-    从 cfg 中根据 key_path（如 "embedding.dataset_path"）取值，
-    不存在时抛 KeyError。
+    Walk cfg using key_path (e.g. "embedding.dataset_path"); raises KeyError if missing.
     """
     cur = cfg
     for k in key_path.split(sep):

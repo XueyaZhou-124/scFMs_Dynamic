@@ -12,7 +12,7 @@ preprocess:
 embedding: 
   model_path: ./pretrained_models/scGPT/scgpt_human
   setting: 'zeroshot'
-  select_col: ["Time", "Phase"] # 需要保存哪些列的meta信息, 如果为空保存所有obs信息
+  select_col: ["Time", "Phase"]  # obs columns to keep in export; empty = all obs
   batch_size: 64
 
 evaluate:

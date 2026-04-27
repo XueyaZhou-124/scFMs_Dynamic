@@ -12,10 +12,10 @@ preprocess:
   gene_key: index
   species: human
 
-embedding: # 参考scfoundation参数设置
+embedding:  # scFoundation embedding settings
   model_path: ./pretrained_models/scFoundation/model/models/models.ckpt
-  pre_normalized: F # 数据是否进行过normalized
-  select_col: ["Time", "Phase"] # 需要保存哪些列的meta信息, 如果为空保存所有obs信息
+  pre_normalized: F  # whether input was already normalized
+  select_col: ["Time", "Phase"]  # obs columns to keep; empty = all obs
 
 evaluate:  
   emb_dim: 768

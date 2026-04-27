@@ -11,9 +11,11 @@ import os
 
 class EmbeddingPreprocessor:
     """
-    1) 仅用训练时点在表达空间(adata.X 或指定 layer)拟合参考 PCA（可选）；
-    2) 对每个候选 embedding (adata.obsm['X_{model}'])，仅用训练时点拟合 标准化(+可选)+PCA(k) 得到 Z 空间；
-    3) 将 Z 写回 adata.obsm['Z_{model}']。
+    1) Optionally fit a reference PCA in expression space (adata.X or a given layer) using
+       training time points only;
+    2) For each candidate embedding (adata.obsm['X_{model}']), fit standardization
+       (+ optional) + PCA(k) on training points only to get Z;
+    3) Write Z back to adata.obsm['Z_{model}'].
     """
 
     def __init__(
@@ -27,7 +29,7 @@ class EmbeddingPreprocessor:
         dtype: str = "float32"
     ):
         if time_key not in adata.obs.columns:
-            raise KeyError(f"time_key='{time_key}' 不在 adata.obs 中。")
+            raise KeyError(f"time_key='{time_key}' is not in adata.obs.")
         self.adata = adata
         self.time_key = time_key
         self.train_times = set(train_times)
@@ -42,17 +44,17 @@ class EmbeddingPreprocessor:
         if self.test_times is not None:
             self.test_mask = np.isin(tvals, list(self.test_times))
             if np.any(self.train_mask & self.test_mask):
-                raise ValueError("train_times 与 test_times 存在重叠。")
+                raise ValueError("train_times and test_times must not overlap.")
         else:
             self.test_mask = ~self.train_mask
 
 
-        # 参考空间（可选）
+        # Reference space (optional)
         self.ref_scaler: Optional[StandardScaler] = None
         self.ref_pca: Optional[PCA] = None
         self.ref_pca_dim: Optional[int] = None
 
-        # 各模型的变换器与元数据
+        # Per-model transformers and metadata
         self.models_: Dict[str, Dict[str, Any]] = {}
 
     def _to_dense_np(self, M) -> np.ndarray:
@@ -68,7 +70,7 @@ class EmbeddingPreprocessor:
     def _get_expr_matrix(self) -> np.ndarray:
         if self.X_obsm is not None:
             if self.X_obsm not in self.adata.obsm:
-                raise ValueError(f"X_obsm='{self.X_obsm}' 不在 adata.obsm 中。")
+                raise ValueError(f"X_obsm='{self.X_obsm}' is not in adata.obsm.")
             X = self.adata.obsm[self.X_obsm]
         else:
             X = self.adata.X
@@ -78,7 +80,7 @@ class EmbeddingPreprocessor:
     def fit_ref(self, k: Optional[int] = None, scale: bool = True, whiten: bool = False,
                 svd_solver: str = "auto", store_key: Optional[str] = None) -> np.ndarray:
         """
-        在表达空间上，仅用训练样本拟合 scaler + PCA(k)，将 Z_ref 写入 obsm[store_key]。
+        In expression space, fit scaler + PCA(k) on training cells only; write Z_ref to obsm[store_key].
         """
         X_all = self._get_expr_matrix()
         n_feat = X_all.shape[1]
@@ -112,11 +114,11 @@ class EmbeddingPreprocessor:
         svd_solver: str = "auto"
     ) -> np.ndarray:
         """
-        仅用训练样本拟合 标准化(+可选)+PCA(k)，得到 Z 并写回 obsm['Z_{model_key}']。
+        Fit standardization + PCA(k) on training cells only; store Z in obsm['Z_{model_key}'].
         """
         obsm_key = f"X_{model_key}"
         if obsm_key not in self.adata.obsm:
-            raise ValueError(f"{obsm_key} 不存在于 adata.obsm。")
+            raise ValueError(f"{obsm_key} is not in adata.obsm.")
         R_all = self._to_dense_np(self.adata.obsm[obsm_key])
 
         n_feat = R_all.shape[1]
@@ -147,9 +149,11 @@ class EmbeddingPreprocessor:
 
 
     def transform_embedding(self, model_key: str, R: np.ndarray) -> np.ndarray:
-        """从原始 embedding 空间 R → Z（使用已拟合的 scaler+pca）。"""
+        """Map from raw embedding space R to Z using the fitted scaler+pca."""
         if model_key not in self.models_:
-            raise ValueError(f"模型 {model_key} 未 fit，请先 fit_embedding('{model_key}')。")
+            raise ValueError(
+                f"Model {model_key} is not fitted; call fit_embedding('{model_key}') first."
+            )
         m = self.models_[model_key]
         X = np.asarray(R, dtype=self.dtype)
         if m["scaler"] is not None:
@@ -159,9 +163,11 @@ class EmbeddingPreprocessor:
 
 
     def inverse_transform_embedding(self, model_key: str, Z: np.ndarray) -> np.ndarray:
-        """从 Z 空间逆变换回原始 embedding 空间 R。"""
+        """Map from Z back to the raw embedding space R."""
         if model_key not in self.models_:
-            raise ValueError(f"模型 {model_key} 未 fit，请先 fit_embedding('{model_key}')。")
+            raise ValueError(
+                f"Model {model_key} is not fitted; call fit_embedding('{model_key}') first."
+            )
         m = self.models_[model_key]
         Z = np.asarray(Z, dtype=self.dtype)
         R_scaled = m["pca"].inverse_transform(Z)
@@ -175,7 +181,9 @@ class EmbeddingPreprocessor:
     def get_Z(self, model_key: str, split: Optional[str] = None) -> np.ndarray:
         key = f"Z_{model_key}"
         if key not in self.adata.obsm:
-            raise ValueError(f"{key} 不存在，请先 fit_embedding('{model_key}')。")
+            raise ValueError(
+                f"{key} is missing; call fit_embedding('{model_key}') first."
+            )
         Z = self.adata.obsm[key]
         if isinstance(Z, pd.DataFrame):
             Z = Z.values
@@ -186,14 +194,14 @@ class EmbeddingPreprocessor:
             return Z[self.train_mask]
         if split == "test":
             return Z[self.test_mask]
-        raise ValueError("split 取值应为 None/'train'/'test'。")
+        raise ValueError("split must be None, 'train', or 'test'.")
     
 
     def get_R(self, model_key: str, split: Optional[str] = None) -> np.ndarray:
-        """便于调试：返回原始 embedding R（X_{model_key}）。"""
+        """Debug helper: return raw embedding R (X_{model_key})."""
         key = f"X_{model_key}"
         if key not in self.adata.obsm:
-            raise ValueError(f"{key} 不存在。")
+            raise ValueError(f"{key} is missing.")
         R = self._to_dense_np(self.adata.obsm[key])
         if split is None:
             return R
@@ -201,7 +209,7 @@ class EmbeddingPreprocessor:
             return R[self.train_mask]
         if split == "test":
             return R[self.test_mask]
-        raise ValueError("split 取值应为 None/'train'/'test'。")
+        raise ValueError("split must be None, 'train', or 'test'.")
     
 
     def info(self) -> Dict[str, Any]:
@@ -225,4 +233,3 @@ class EmbeddingPreprocessor:
                 "explained_variance_ratio": self.ref_pca.explained_variance_ratio_.astype(float).tolist(),
             }
         return out
-

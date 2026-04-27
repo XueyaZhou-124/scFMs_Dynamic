@@ -102,9 +102,8 @@ def eval(embs_df, emb_dims, labels = ['cell_type', 'dataset', 'state'], umap_key
             return_fig=True,
             show=False,
         )
-        # 设置图大小和布局
-        fig.set_size_inches(8, 6)  # 或者你自己调试合适的大小 (width, height)
-        fig.tight_layout()         # 自动调整子图布局，避免标题、legend被截断
+        fig.set_size_inches(8, 6)
+        fig.tight_layout()
 
         figs.append(fig)
 
@@ -163,9 +162,8 @@ def eval_fromadata(embd_adata, emb_key, umap_keys = ['cell_type'], batch_key = '
             return_fig=True,
             show=False,
         )
-        # 设置图大小和布局
-        fig.set_size_inches(8, 6)  # 或者你自己调试合适的大小 (width, height)
-        fig.tight_layout()         # 自动调整子图布局，避免标题、legend被截断
+        fig.set_size_inches(8, 6)
+        fig.tight_layout()
 
         figs.append(fig)
 

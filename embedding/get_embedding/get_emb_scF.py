@@ -26,7 +26,6 @@ from ..utils.data_utils import getadata
 # --save_path /personal/scF_dynamic/output/mouse_hematopoiesis/ --pre_normalized T --version ce --model_path ~/scFoundation/model/models/models.ckpt
 
 def run(config):
-    # 从 config 构造一个 argparse.Namespace 对象
     args = argparse.Namespace()
 
     task_name = config["task_name"]
@@ -38,7 +37,6 @@ def run(config):
     args.pool_type = config['embedding'].get("pool_type", "all")
     args.tgthighres = config['embedding'].get("tgthighres", "t4")
 
-    # 拼接路径
     args.data_path = config['embedding']['dataset_path']
     args.save_path = config['embedding']['output_path']
     
@@ -50,7 +48,6 @@ def run(config):
     # select col
     args.select_col = config['embedding'].get("select_col", None)
 
-    # 调用原本的主函数
     print(args)
     main(args)
 
@@ -149,11 +146,11 @@ def main(args):
         gexpr_feature=pd.read_csv(args.data_path,index_col=0)
     
     if gexpr_feature.shape[1]<19264:
-        print('covert gene feature into 19264')
+        print('Convert gene features to fixed 19264-dim input')
         gexpr_feature, to_fill_columns,var = main_gene_selection(gexpr_feature,gene_list)
         assert gexpr_feature.shape[1]>=19264
     
-    if (args.pre_normalized == 'F') and (args.input_type == 'bulk'): # 对bulk数据进行normalize
+    if (args.pre_normalized == 'F') and (args.input_type == 'bulk'):  # normalize bulk input
         adata = sc.AnnData(gexpr_feature)
         sc.pp.normalize_total(adata)
         sc.pp.log1p(adata)
@@ -183,7 +180,7 @@ def main(args):
             key = 'gene'
         else:
             raise ValueError('output_mode must be one of cell gene, gene_batch, gene_expression')
-    pretrainmodel,pretrainconfig = load_model_frommmf(ckpt_path,key) # 导入模型和key
+    pretrainmodel,pretrainconfig = load_model_frommmf(ckpt_path,key)  # load checkpoint and key
     pretrainmodel.eval()
 
     geneexpemb=[]
@@ -191,7 +188,7 @@ def main(args):
 
     # edited
     if os.path.isdir(args.save_path):
-        strname = os.path.join(args.save_path, args.task_name +'_'+ args.ckpt_name +"_"+ args.input_type + '_' + args.output_type + '_embedding_' + args.tgthighres + '_resolution.h5ad') # 改成输出adata格式
+        strname = os.path.join(args.save_path, args.task_name +'_'+ args.ckpt_name +"_"+ args.input_type + '_' + args.output_type + '_embedding_' + args.tgthighres + '_resolution.h5ad')  # AnnData output
     else:
         strname = args.save_path
 
@@ -319,10 +316,9 @@ def main(args):
 
     # edited
     if args.output_type=='cell':
-        print('concat meta information')
+        print('Concatenating meta columns')
         geneexpemb = pd.DataFrame(geneexpemb, index = idx)
         geneexpemb = pd.concat([geneexpemb, meta],axis=1)
-        # 改成输出adata格式
         adata = getadata(geneexpemb, hidden_dim, meta.columns.to_list())
         sc.write(strname, adata)
         print(f'save embedding to {strname}')

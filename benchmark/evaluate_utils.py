@@ -93,10 +93,10 @@ class W1TMVCalculator(MetricCalculator):
 
     def calculate(
         self,
-        df: pd.DataFrame, # 真实数据，cols: ['samples', 'x1', 'x2' ... 'xn']
-        all_times: List[Any], # 从0出发需要计算的时间点
-        sde_point_array: List[np.ndarray], # 列表，形状为（T, N, G）
-        weight: List[np.ndarray], # 列表同上
+        df: pd.DataFrame,  # Ground truth; cols: ['samples', 'x1', 'x2', ...]
+        all_times: List[Any],  # Time points to evaluate
+        sde_point_array: List[np.ndarray],  # Per time, shape (T, N, G) style blocks
+        weight: List[np.ndarray],  # Same structure as sde_point_array
     ) -> pd.DataFrame:
         """Calculate W1 and TMV metrics."""
         base_time = 0
@@ -144,21 +144,21 @@ class TCVCCalculator(MetricCalculator):
     def evaluate_adata_metrics_sampled(
         self,
         adata,
-        use_key: str = 'X_nor',          # 特征矩阵所在 obsm 键（如 'X_nor' 或 'X_pca'）
-        label_key: str | None = None,    # 标签列名；None 时优先 time_categorical，否则 time
-        velocity_layer: str = 'velocity',# 速度所在 layer
-        k: int = 30,                     # 每个查询点的近邻数
-        q: int = 5000,                   # 查询点采样数量
-        seed: int = 0,                   # 随机种子
-        n_jobs: int = -1,                # sklearn 并行
-        eps: float = 1e-8,               # 防零范数
+        use_key: str = 'X_nor',          # obsm key for features ('X_nor', 'X_pca', ...)
+        label_key: str | None = None,    # label column; None -> time_categorical else time
+        velocity_layer: str = 'velocity',# layer for velocity vectors
+        k: int = 30,                     # neighbors per query
+        q: int = 5000,                   # number of query samples
+        seed: int = 0,                   # RNG seed
+        n_jobs: int = -1,                # sklearn n_jobs
+        eps: float = 1e-8,               # avoid zero norms
         test_idx: np.ndarray = None,
     ):
-        # 取特征
+        # Features
         points = np.asarray(adata.obsm[use_key], dtype=np.float32)
         N = np.arange(0, points.shape[0])
         if test_idx is not None:
-            # 只算 test time 的 corr
+            # Restrict to test-time cells
             test_idx = test_idx.reshape(-1)
             N = N[test_idx]
         
@@ -166,7 +166,7 @@ class TCVCCalculator(MetricCalculator):
             raise ValueError("No cells in points.")
         q = int(min(q, len(N)))
 
-        # 取标签
+        # Labels
         if label_key is None:
             if 'time_categorical' in adata.obs.columns:
                 label_key = 'time_categorical'
@@ -181,29 +181,29 @@ class TCVCCalculator(MetricCalculator):
             labels = pd.Categorical(labels_series).codes
         labels = labels.astype(np.int64)
 
-        # 取速度
+        # Velocity
         if velocity_layer not in adata.layers:
             raise KeyError(f"Layer '{velocity_layer}' not found in adata.layers")
         velocity = np.asarray(adata.layers[velocity_layer], dtype=np.float32)
         if velocity.shape[1] != points.shape[1]:
             raise ValueError(f"velocity dim {velocity.shape[1]} != points dim {points.shape[1]}")
 
-        # 采样查询点
+        # Sample query points
         rng = np.random.default_rng(seed)
         q_idx = rng.choice(N, size=q, replace=False)
 
-        # kNN（在全量 points 上建索引）
+        # kNN index on all points
         nn = NearestNeighbors(n_neighbors=k+1, algorithm='auto', n_jobs=n_jobs)
         nn.fit(points)
         _, inds = nn.kneighbors(points[q_idx], n_neighbors=k+1, return_distance=True)
-        inds = inds[:, 1:]  # 去掉自身
+        inds = inds[:, 1:]  # drop self
 
-        # 标签一致性
+        # Label consistency
         same = (labels[inds] == labels[q_idx, None]).sum()
         total = inds.size
         label_consistency = float(same / total) if total > 0 else float('nan')
 
-        # 速度一致性（余弦）
+        # Velocity consistency (cosine)
         norms = np.linalg.norm(velocity, axis=1, keepdims=True)
         norms = np.maximum(norms, eps)
         U = velocity / norms
@@ -239,7 +239,7 @@ class TCVCCalculator(MetricCalculator):
         results = self.evaluate_adata_metrics_sampled(
             velocity_adata, k=k, q=q, use_key=use_key, velocity_layer=velocity_layer, test_idx=test_idx
         )
-        # 只保留一些key的结果
+        # Keep TC/VC only
         res = {
             'TC': results['label_consistency'], 
             'VC': results['velocity_consistency'],
@@ -301,12 +301,13 @@ class PseudotimeCalculator(MetricCalculator):
         X_sim = traj.reshape(T * N, G)
    
         knn = NearestNeighbors(n_neighbors=knn_k, algorithm="auto")
-        knn.fit(X_sim) # 对生成的数据 fit KNN
+        knn.fit(X_sim)  # index on simulated trajectories
 
         # dists, idxs = knn.kneighbors(X_sim, n_neighbors=knn_k)
         dists, idxs = knn.kneighbors(X_real, n_neighbors=knn_k)
         # est_pst = pst_real[idxs].mean(axis=1)
-        est_pst = t_flat[idxs].mean(axis=1) # 在生成数据里找真实数据的五个最近邻的 ts 均值作为预测的伪时间 label
+        # Mean neighbor time on simulated manifold as predicted pseudotime
+        est_pst = t_flat[idxs].mean(axis=1)
         est_pst = (est_pst - est_pst.min()) / (est_pst.max() - est_pst.min())
 
         rho, _ = spearmanr(pst_real, est_pst)
@@ -405,13 +406,12 @@ class AlignmnetEvaluator:
     ) -> pd.DataFrame:
         """Evaluate TC/VC metrics for a model."""
         # if len(self.test_times) != 0:
-        #     # 只算test time的corr
         #     velocity_adata = velocity_adata[self.test_idx,:]
 
         velocity_adata = normalize_data(velocity_adata, dimreducted_key='X_PCA')
         align_model = aligner
 
-        Z = velocity_adata.layers['Ms'] # 特征矩阵
+        Z = velocity_adata.layers['Ms']  # feature matrix
         Z_to_ref = align_model.transform(Z)
         velocity_adata.obsm['Ms_aligned'] = Z_to_ref
 

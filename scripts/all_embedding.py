@@ -78,16 +78,13 @@ def main():
     parser.add_argument("--save_dir", default='./data/')
     args = parser.parse_args()
 
-    # 加载配置
     config = load_config(args.config)
     config = init_paths(config, args.save_dir)
     print(config)
 
     model_name = args.model.lower()
-    # 检查config和model_name匹配
-    assert config['model'].lower() == model_name , "selected model and config is not matched"
+    assert config['model'].lower() == model_name, "selected model and config do not match"
 
-    # 选择策略类
     if (model_name not in STRATEGY_REGISTRY):
         raise ValueError(f"Model '{model_name}' not registered. Available: {list(STRATEGY_REGISTRY.keys())}")
     
@@ -96,7 +93,6 @@ def main():
     strategy = strategy_cls(config)
     print(config)
 
-    # 执行步骤
     if args.step == "preprocess":
         strategy.preprocess()
     elif args.step == "embedding":

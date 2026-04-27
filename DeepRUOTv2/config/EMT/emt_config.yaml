@@ -12,7 +12,7 @@ data:
   file_path: 'emt.csv' # path to the dataset
   dim: 10 # data dimension
   hold_one_out: true # whether to use leave-one-out for validation
-  hold_out: 3 # validation timepoint, does not work if hold_one_out is false # 留t3进行evaluate
+  hold_out: 3 # validation timepoint (e.g. t3); ignored if hold_one_out is false
 
 model:
   in_out_dim: 10 # data dimension

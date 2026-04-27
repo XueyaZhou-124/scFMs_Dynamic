@@ -71,11 +71,13 @@ class BaseRunner:
 # -------- deepRUOT adaptor --------
 class DeepRUOTEngine(BaseRunner):
     """
-    适配你的 config 架构：
-      - 模板键：exp.output_dir, data.file_path, data.dim, data.hold_one_out, data.hold_out, model.in_out_dim 等
-      - 数据 CSV 列：['samples', 'x1', ..., 'xd']，samples 是时间
-      - 训练/生成共用模板；生成在 exp.output_dir 下产出 run_*.npz，包含 point、traj、lnw、weight、ts
-      - 可通过 --num_runs 控制生成次数
+    Adapts to the project's config layout:
+      - Template keys: exp.output_dir, data.file_path, data.dim, data.hold_one_out, data.hold_out,
+        model.in_out_dim, etc.
+      - Data CSV columns: ['samples', 'x1', ..., 'xd'] where samples holds time
+      - Train and generate share a template; generation writes run_*.npz under exp.output_dir
+        with point, traj, lnw, weight, ts
+      - Use --num_runs to control how many runs are generated
     """
     def __init__(
         self,
@@ -92,33 +94,33 @@ class DeepRUOTEngine(BaseRunner):
         self.python_exec = python_exec
         self.timeout_sec = timeout_sec
 
-        # 文件契约
+        # File layout contract
         self.file_layout = {
-            "data_file_name": "emt.csv",       # 写入 data.file_path
-            "meta_file_name": "meta.json",     # 可选
+            "data_file_name": "emt.csv",       # written to data.file_path
+            "meta_file_name": "meta.json",     # optional
             "ckpt_glob": ["*.pt", "*.ckpt", "checkpoint*", "**/*.pt", "**/*.ckpt"],
-            "run_npz_glob": "run_*.npz",       # 生成的多个 npz
-            "traj_key_in_npz": "traj",         # 默认取 'traj' 作为轨迹
+            "run_npz_glob": "run_*.npz",       # multiple generated npz
+            "traj_key_in_npz": "traj",         # default trajectory key
         }
         if file_layout:
             deep_update(self.file_layout, file_layout)
 
-    # ----- 训练 -----
+    # ----- training -----
     def fit(self, data: Dict[str, Any], config: Dict[str, Any], otmode: str) -> Dict[str, Any]:
         Z = np.asarray(data["Z"], dtype=np.float32)
         t = np.asarray(data["t"], dtype=float)
-        assert Z.shape[0] == t.shape[0], "Z 与 t 行数不一致"
+        assert Z.shape[0] == t.shape[0], "Z and t must have the same number of rows"
 
         tpl = load_yaml(self.template_cfg) if self.template_cfg else {}
         base = dict(config)
 
-        # exp.output_dir 确定
+        # Resolve exp.output_dir
         out_dir = (base.get("exp") or {}).get("output_dir") or (tpl.get("exp") or {}).get("output_dir")
         if not out_dir:
             out_dir = os.path.join("deepruot_res", f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
         ensure_dir(out_dir)
 
-        # 数据写入
+        # Write data
         data_dir_raw = data.get("data_dir") or ensure_dir(os.path.join(out_dir, "train_data"))
         data_dir = os.path.abspath(os.path.expanduser(data_dir_raw))
         data_file = os.path.abspath(
@@ -127,14 +129,14 @@ class DeepRUOTEngine(BaseRunner):
         self._write_dataset_csv(Z, t, data_file)
 
         dim = Z.shape[1]
-        # DeepRUOT train_RUOT / infer_RUOT join(DATA_DIR, file_path)；file_path 必须是绝对路径，
-        # 否则会错误拼到 DeepRUOTv2/data/ 下。
+        # DeepRUOT train_RUOT / infer_RUOT join(DATA_DIR, file_path); file_path must be absolute
+        # or it is wrongly resolved under DeepRUOTv2/data/.
         overrides = {
             "exp": {"output_dir": out_dir},
             "data": {"file_path": data_file, "dim": int(dim)},
             "model": {"in_out_dim": int(dim)},
         }
-        # 可选：透传 hold_out 初值（若模板或 base 未定义）
+        # Optional: pass through hold_out if not set in template or base
         if "hold_out" in data:
             overrides = deep_update(overrides, {"data": {"hold_out": to_scalar(data["hold_out"]), "hold_one_out": True}})
 
@@ -146,7 +148,7 @@ class DeepRUOTEngine(BaseRunner):
         res_dir = os.path.join(cfg['exp']['output_dir'], cfg['exp']['name'])
 
         if self._exist_checkpoint(res_dir):
-            print('model is exist, skip training')
+            print('Model already exists, skipping training')
             return cfg_path
 
         # training
@@ -163,13 +165,13 @@ class DeepRUOTEngine(BaseRunner):
         num_runs: int = 5,
     ) -> Dict[str, Any]:
         """
-        对于每个测试时间点 t：
-          - 在 state.config_path 的基础上覆盖 data.hold_out = t
-          - 将 exp.output_dir 切到子目录 out_dir/gen_t{t}（避免 run 混淆）
-          - 调用 generate.py --config <cfg> --num_runs <num_runs>
-          - 收集该目录下所有 run_*.npz 并解析出 point/traj/lnw/weight/ts
+        For each test time t (conceptual API; implementation may vary):
+          - Override data.hold_out = t on top of state.config_path
+          - Point exp.output_dir to a subdir out_dir/gen_t{t} (avoids run collisions)
+          - Call generate.py --config <cfg> --num_runs <num_runs>
+          - Collect run_*.npz and parse point/traj/lnw/weight/ts
 
-        返回:
+        Returns (schema):
         {
           "times": [t1, t2, ...],
           "by_time": {
@@ -177,16 +179,16 @@ class DeepRUOTEngine(BaseRunner):
               "out_dir": ".../gen_t1",
               "config_path": ".../config.gen_t1.yaml",
               "runs": [
-                {"idx": 0, "path": ".../run_0.npz", "point": np.ndarray, "traj": np.ndarray, "lnw": np.ndarray, "weight": np.ndarray, "ts": np.ndarray},
+                {"idx": 0, "path": ".../run_0.npz", "point": ..., "traj": ..., ...},
                 ...
               ],
               "stacked": {
-                # 若所有 run 形状一致则提供这些快捷堆叠
-                "traj": np.ndarray,   # 形如 (num_runs, ...原始形状...)
+                # Stacked arrays if all runs share the same shape
+                "traj": np.ndarray,   # e.g. (num_runs, ...)
                 "point": np.ndarray,
                 "lnw": np.ndarray,
                 "weight": np.ndarray,
-                "ts": np.ndarray      # 若各 run ts 完全一致，形如 (T,)；否则不提供
+                "ts": np.ndarray      # only if ts match across runs
               }
             },
             ...
@@ -197,10 +199,10 @@ class DeepRUOTEngine(BaseRunner):
         cfg = load_yaml(config_path)
         res_dir = os.path.join(cfg['exp']['output_dir'], cfg['exp']['name'])
         if not self._exist_checkpoint(res_dir):
-            print('fit model first')
+            print('Fit the model first')
             raise
 
-        # 执行 generate.py，透传 --num_runs
+        # Run generate.py with --num_runs
         gen_log = os.path.join(res_dir, 'infer.log')
         self._run_cli(self.generate_script, config_path, gen_log, extra_args=["--num_runs", str(int(num_runs))])
 
@@ -241,7 +243,9 @@ class DeepRUOTEngine(BaseRunner):
             proc = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT, timeout=self.timeout_sec, check=False)
         if proc.returncode != 0:
             tail = self._tail_file(log_path, 60)
-            raise RuntimeError(f"CLI 执行失败（{script}）。查看日志: {log_path}\n--- LOG TAIL ---\n{tail}")
+            raise RuntimeError(
+                f"CLI failed ({script}). See log: {log_path}\n--- LOG TAIL ---\n{tail}"
+            )
         
 
     def _tail_file(self, path: str, n: int) -> str:
@@ -250,7 +254,7 @@ class DeepRUOTEngine(BaseRunner):
                 lines = f.readlines()
             return "".join(lines[-n:])
         except Exception:
-            return f"<无法读取日志 {path}>"
+            return f"<Could not read log {path}>"
 
 
     def _exist_checkpoint(self, out_dir: str) -> Optional[str]:
@@ -267,7 +271,7 @@ class DeepRUOTEngine(BaseRunner):
     def _collect_runs(self, out_dir_t: str) -> List[Dict[str, Any]]:
         npz_paths = sorted(glob.glob(os.path.join(out_dir_t, self.file_layout["run_npz_glob"])))
         if not npz_paths:
-            raise FileNotFoundError(f"未找到 run_*.npz 于 {out_dir_t}")
+            raise FileNotFoundError(f"No run_*.npz files found in {out_dir_t}")
         runs = []
         for p in npz_paths:
             with np.load(p) as data:
@@ -284,7 +288,7 @@ class DeepRUOTEngine(BaseRunner):
         return runs
 
     def _infer_run_idx(self, path: str) -> int:
-        # 从 run_123.npz 提取 123
+        # Parse run index from run_123.npz -> 123
         base = os.path.basename(path)
         try:
             s = os.path.splitext(base)[0]  # run_123
@@ -296,31 +300,32 @@ class DeepRUOTEngine(BaseRunner):
         stacked: Dict[str, np.ndarray] = {}
         if not runs:
             return stacked
-        # 尝试堆叠 traj/point/lnw/weight；要求形状一致
+        # Stack traj/point/lnw/weight when shapes match
         for key in ["traj", "point", "lnw", "weight"]:
             arrs = [r[key] for r in runs if r.get(key) is not None]
             if len(arrs) == len(runs):
                 shapes = {tuple(a.shape) for a in arrs}
                 if len(shapes) == 1:
                     stacked[key] = np.stack(arrs, axis=0)  # (num_runs, ...)
-        # ts：必须完全一致才堆叠（否则返回空）
+        # ts: stack only if identical across runs
         ts_arrs = [r["ts"] for r in runs if r.get("ts") is not None]
         if len(ts_arrs) == len(runs):
-            # 全部等长且逐元素相等
+            # Same length and element-wise equal
             same = all((a.shape == ts_arrs[0].shape and np.allclose(a, ts_arrs[0])) for a in ts_arrs)
             if same:
                 stacked["ts"] = ts_arrs[0].copy()
         return stacked
 
 
-# sf2m adptor 
+# sf2m adaptor
 class sf2mEngine(BaseRunner):
     """
-    适配你的 config 架构：
-      - 模板键：exp.output_dir, data.file_path, data.dim, data.hold_one_out, data.hold_out, model.in_out_dim 等
-      - 数据 CSV 列：['samples', 'x1', ..., 'xd']，samples 是时间
-      - 训练/生成共用模板；生成在 exp.output_dir 下产出 run_*.npz，包含 point、traj、lnw、weight、ts
-      - 可通过 --num_runs 控制生成次数
+    Adapts to the project's config layout (same idea as DeepRUOTEngine):
+      - Template keys: exp.output_dir, data.file_path, data.dim, data.hold_one_out, data.hold_out,
+        model.in_out_dim, etc.
+      - Data CSV: ['samples', 'x1', ..., 'xd'] with samples as time
+      - Train/generate share a template; generation writes run_*.npz under exp.output_dir
+      - Use --num_runs to control the number of runs
     """
     def __init__(
         self,
@@ -337,32 +342,32 @@ class sf2mEngine(BaseRunner):
         self.python_exec = python_exec
         self.timeout_sec = timeout_sec
 
-        # 文件契约
+        # File layout contract
         self.file_layout = {
-            "data_file_name": "emt.csv",       # 写入 data.file_path
+            "data_file_name": "emt.csv",       # written to data.file_path
             "ckpt_glob": ["sf2m_model.pt", "*.ckpt", "checkpoint*", "**/*.pt", "**/*.ckpt"],
-            "run_npz_glob": "sf2m_run_*.npz",       # 生成的多个 npz
-            "traj_key_in_npz": "traj",         # 默认取 'traj' 作为轨迹
+            "run_npz_glob": "sf2m_run_*.npz",       # multiple generated npz
+            "traj_key_in_npz": "traj",         # default trajectory key
         }
         if file_layout:
             deep_update(self.file_layout, file_layout)
 
-    # ----- 训练 -----
+    # ----- training -----
     def fit(self, data: Dict[str, Any], config: Dict[str, Any], otmode: str) -> Dict[str, Any]:
         Z = np.asarray(data["Z"], dtype=np.float32)
         t = np.asarray(data["t"], dtype=float)
-        assert Z.shape[0] == t.shape[0], "Z 与 t 行数不一致"
+        assert Z.shape[0] == t.shape[0], "Z and t must have the same number of rows"
 
         tpl = load_yaml(self.template_cfg) if self.template_cfg else {}
         base = dict(config)
 
-        # exp.output_dir 确定
+        # Resolve exp.output_dir
         out_dir = (base.get("exp") or {}).get("output_dir") or (tpl.get("exp") or {}).get("output_dir")
         if not out_dir:
             out_dir = os.path.join("deepruot_res", f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
         ensure_dir(out_dir)
 
-        # 数据写入
+        # Write data
         data_dir = data.get("data_dir") or ensure_dir(os.path.join(out_dir, "train_data"))
         data_file = os.path.join(data_dir, self.file_layout["data_file_name"])
         self._write_dataset_csv(Z, t, data_file)
@@ -372,7 +377,7 @@ class sf2mEngine(BaseRunner):
             "data": {"exp_dir": out_dir},
             "data": {"file_path": data_file, "dim": int(dim)},
         }
-        # 可选：透传 hold_out 初值（若模板或 base 未定义）
+        # Optional: pass through hold_out if not in template or base
         if "hold_out" in data:
             overrides = deep_update(overrides, {"train": {"hold_out": to_scalar(data["hold_out"])}})
 
@@ -384,7 +389,7 @@ class sf2mEngine(BaseRunner):
         res_dir = os.path.join(cfg['exp']['output_dir'], cfg['exp']['name'])
 
         if self._exist_checkpoint(res_dir):
-            print('model is exist, skip training')
+            print('Model already exists, skipping training')
             return cfg_path
 
         # training
@@ -403,7 +408,7 @@ class sf2mEngine(BaseRunner):
         cfg = load_yaml(config_path)
         res_dir = os.path.join(cfg['exp']['output_dir'], cfg['exp']['name'])
         if not self._exist_checkpoint(res_dir):
-            print('fit model first')
+            print('Fit the model first')
             raise
 
         gen_log = os.path.join(res_dir, 'infer.log')
@@ -446,7 +451,9 @@ class sf2mEngine(BaseRunner):
             proc = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT, timeout=self.timeout_sec, check=False)
         if proc.returncode != 0:
             tail = self._tail_file(log_path, 60)
-            raise RuntimeError(f"CLI 执行失败（{script}）。查看日志: {log_path}\n--- LOG TAIL ---\n{tail}")
+            raise RuntimeError(
+                f"CLI failed ({script}). See log: {log_path}\n--- LOG TAIL ---\n{tail}"
+            )
         
 
     def _tail_file(self, path: str, n: int) -> str:
@@ -455,7 +462,7 @@ class sf2mEngine(BaseRunner):
                 lines = f.readlines()
             return "".join(lines[-n:])
         except Exception:
-            return f"<无法读取日志 {path}>"
+            return f"<Could not read log {path}>"
 
 
     def _exist_checkpoint(self, out_dir: str) -> Optional[str]:
@@ -472,7 +479,7 @@ class sf2mEngine(BaseRunner):
     def _collect_runs(self, out_dir_t: str) -> List[Dict[str, Any]]:
         npz_paths = sorted(glob.glob(os.path.join(out_dir_t, self.file_layout["run_npz_glob"])))
         if not npz_paths:
-            raise FileNotFoundError(f"未找到 run_*.npz 于 {out_dir_t}")
+            raise FileNotFoundError(f"No run_*.npz files found in {out_dir_t}")
         runs = []
         for p in npz_paths:
             with np.load(p) as data:
@@ -489,7 +496,7 @@ class sf2mEngine(BaseRunner):
         return runs
 
     def _infer_run_idx(self, path: str) -> int:
-        # 从 run_123.npz 提取 123
+        # Parse run index from run_123.npz -> 123
         base = os.path.basename(path)
         try:
             s = os.path.splitext(base)[0]  # run_123
@@ -501,17 +508,17 @@ class sf2mEngine(BaseRunner):
         stacked: Dict[str, np.ndarray] = {}
         if not runs:
             return stacked
-        # 尝试堆叠 traj/point/lnw/weight；要求形状一致
+        # Stack traj/point/lnw/weight when shapes match
         for key in ["traj", "point", "lnw", "weight"]:
             arrs = [r[key] for r in runs if r.get(key) is not None]
             if len(arrs) == len(runs):
                 shapes = {tuple(a.shape) for a in arrs}
                 if len(shapes) == 1:
                     stacked[key] = np.stack(arrs, axis=0)  # (num_runs, ...)
-        # ts：必须完全一致才堆叠（否则返回空）
+        # ts: stack only if identical across runs
         ts_arrs = [r["ts"] for r in runs if r.get("ts") is not None]
         if len(ts_arrs) == len(runs):
-            # 全部等长且逐元素相等
+            # Same length and element-wise equal
             same = all((a.shape == ts_arrs[0].shape and np.allclose(a, ts_arrs[0])) for a in ts_arrs)
             if same:
                 stacked["ts"] = ts_arrs[0].copy()

@@ -59,10 +59,9 @@ def run(config):
 
     if species != 'human':
         print(f"Loading homologues data from {homo_path}")
-        homo_df = pd.read_table(homo_path) # 人同源基因转换
+        homo_df = pd.read_table(homo_path)  # homologue table
 
-        # human gene symbol covert
-        print('human gene symbol covert')
+        print('Mapping to human gene symbols')
         dict1 = dict(zip(homo_df['Gene name'], homo_df['Human gene name']))
         if gene_key == 'index':
             adata.var['human gene name'] = [dict1.get(i, np.nan) for i in adata.var.index.tolist()]
@@ -84,11 +83,10 @@ def run(config):
     gene_list_df = pd.read_csv(gene_list_path, header=0, delimiter='\t')
     gene_list = list(gene_list_df['gene_name'])
     X_df, to_fill_columns, var = main_gene_selection(X_df, gene_list)
-    # 对重复的基因名分组，取平均
+    # Duplicate column names: group and take mean
     if X_df.shape[1] > 19266:
         X_df_mean = X_df.groupby(X_df.columns, axis=1).mean()
         X_df = X_df_mean.copy()
-    # 转为稀疏矩阵保存
     adata_uni = sc.AnnData(sparse.csr_matrix(X_df))
     adata_uni.obs = adata.obs
     print('Gene symbol unified')

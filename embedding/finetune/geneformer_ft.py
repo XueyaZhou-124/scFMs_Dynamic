@@ -138,7 +138,7 @@ def run(config):
     }
 
     user_config = config.get("finetune", {})
-    # 类型转换保险处理
+    # Coerce numeric types from YAML
     if "lr" in user_config:
         user_config["lr"] = float(user_config["lr"])
     if "lora_dropout" in user_config:

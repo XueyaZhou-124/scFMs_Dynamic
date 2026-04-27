@@ -29,13 +29,13 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # 非 TrainingArguments 的自定义参数
+    # Custom args (not in HuggingFace TrainingArguments)
     parser.add_argument("--model_path", type=str, default="/root/GeneCompass/pretrained_models/GeneCompass_Base")
     parser.add_argument("--data_path", type=str, default="./data")
     parser.add_argument("--save_path", type=str, default="./save")
     parser.add_argument("--seed", type=int, default=42)
 
-    # TrainingArguments 的参数
+    # HuggingFace TrainingArguments
     parser.add_argument("--num_train_epochs", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--per_device_train_batch_size", type=int, default=4)

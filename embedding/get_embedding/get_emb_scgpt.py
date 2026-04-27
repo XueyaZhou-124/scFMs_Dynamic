@@ -146,17 +146,17 @@ class DataProcessor:
             )
 
             print(f"Loading homologues data from {homo_path}")
-            homo_df = pd.read_table(homo_path) # 人同源基因转换
+            homo_df = pd.read_table(homo_path)  # human–other species homolog mapping
 
-            # human gene symbol covert
-            print('human gene symbol covert')
+            # Map to human gene symbols
+            print('Mapping to human gene symbols')
             dict1 = dict(zip(homo_df['Gene name'], homo_df['Human gene name']))
             
             if self.gene_key == 'index':
                 adata.var['gene_name'] = [dict1.get(i) for i in adata.var.index.tolist()]
             else:
                 adata.var['gene_name'] = [dict1.get(i) for i in adata.var[self.gene_key]]
-            # 去掉adata中gene_name为nan的基因
+            # Drop genes with missing mapped symbol
             adata = adata[:, ~pd.isna(adata.var['gene_name'])]
             
         else:

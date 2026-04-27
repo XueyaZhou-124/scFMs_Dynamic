@@ -67,7 +67,7 @@ class CellEmbeddingExtractor():
         forward_batch_size = self.forward_batch_size
         if (self.token_dictionary_path is not None):
             if 'species' not in dataset.features:
-                species = 0 # 人就是0，鼠就是1
+                species = 0  # human=0, mouse=1
                 print(f'add species:{species}')
                 new_column = [species] * len(dataset)
                 new_column = [[x] for x in new_column]
@@ -123,13 +123,13 @@ def main():
                                               data_path=dataset_path, # datasetdir
                                               forward_batch_size=60, 
                                               device=DEVICE)
-    # 需要导出的embdding meta信息
+    # obs columns to attach to embedding export
     select_col = ['Time point', 'Cell type annotation'] 
     cellembextractor.get_emb(select_col)
 
 
 def run(config):
-    # 从 config 中读取参数
+    # Read parameters from config
     model_path = config["embedding"]["model_path"]
     output = config["embedding"]["output_path"]
     dataset_path = config["embedding"]["dataset_path"]
@@ -142,7 +142,6 @@ def run(config):
     batch_size = config["embedding"].get("batch_size", 60)
     
 
-    # 初始化并运行
     cellembextractor = CellEmbeddingExtractor(
         model_path=model_path,
         emb_path=output,

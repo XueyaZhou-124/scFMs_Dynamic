@@ -17,7 +17,7 @@ class BaseAligner:
 
 
 class IdentityAligner(BaseAligner):
-    # 不做变换，在自己的空间里计算metric
+    # No transform; metrics are computed in each model's own space
     name = "identity"
     def fit(self, Z_src_train, Z_ref_train, config=None):
         return self
@@ -68,24 +68,24 @@ class RidgeAligner(BaseAligner):
 
     def __init__(self, lam: float = 1e-2, fit_intercept: bool = True, standardize: bool = False):
         """
-        lam: L2 正则系数（λ>=0）。越大越保守，数值更稳但可能偏差增大。
-        fit_intercept: 是否拟合偏置（通过对齐前中心化与对齐后还原实现）。
-        standardize: 是否对源特征做列标准化（仅对 Xs 做，提升数值稳定性）。
+        lam: L2 penalty (lambda >= 0). Larger values are more conservative (more stable, possibly more bias).
+        fit_intercept: whether to fit an intercept (centering before fit, add back after).
+        standardize: whether to column-standardize source features (Xs only) for numerical stability.
         """
         self.lam = float(lam)
         self.fit_intercept = bool(fit_intercept)
         self.standardize = bool(standardize)
 
-        self.W = None         # 线性映射矩阵 (d_src, d_tgt)
-        self.mu_s = None      # 源均值 (1, d)
-        self.mu_r = None      # 参照均值 (1, d)
-        self.std_s = None     # 源标准差 (1, d) - 仅在 standardize=True 时使用
+        self.W = None         # linear map (d_src, d_tgt)
+        self.mu_s = None      # source mean (1, d)
+        self.mu_r = None      # reference mean (1, d)
+        self.std_s = None     # source std (1, d), only if standardize=True
 
     def fit(self, Z_src_train, Z_ref_train, config=None):
         """
         Z_src_train: (n, d)
-        Z_ref_train: (n, d) 与源一一对应
-        config: 可选字典覆盖 lam/fit_intercept/standardize
+        Z_ref_train: (n, d), row-aligned with source
+        config: optional dict overriding lam / fit_intercept / standardize
         """
         if config is not None:
             if "lam" in config: self.lam = float(config["lam"])
@@ -97,7 +97,7 @@ class RidgeAligner(BaseAligner):
         assert Zs.shape == Zr.shape, "source and reference must be paired (same shape)"
         n, d = Zs.shape
 
-        # 均值（用于拟合偏置）
+        # Means (for intercept)
         if self.fit_intercept:
             self.mu_s = Zs.mean(axis=0, keepdims=True)
             self.mu_r = Zr.mean(axis=0, keepdims=True)
@@ -108,27 +108,27 @@ class RidgeAligner(BaseAligner):
         Xs = Zs - self.mu_s if self.fit_intercept else Zs
         Xr = Zr - self.mu_r if self.fit_intercept else Zr
 
-        # 可选：仅对源做列标准化，提升数值稳定性
+        # Optional: column-standardize source only
         if self.standardize:
             std = Xs.std(axis=0, keepdims=True)
-            std[std == 0.0] = 1.0  # 防止除零
+            std[std == 0.0] = 1.0  # avoid division by zero
             self.std_s = std
             Xs = Xs / std
         else:
             self.std_s = None
 
-        # 多输出 ridge 闭式解：W = (Xs^T Xs + λI)^(-1) Xs^T Xr
+        # Multi-output ridge closed form: W = (Xs^T Xs + lambda I)^(-1) Xs^T Xr
         I = np.eye(d, dtype=np.float64)
         A = Xs.T @ Xs + self.lam * I
         B = Xs.T @ Xr
-        # 数值稳定的线性方程求解，避免显式求逆
+        # Stable linear solve instead of explicit inverse
         self.W = np.linalg.solve(A, B)
 
         return self
 
     def transform(self, Z_src):
         """
-        将任意源域样本映射到参照域。
+        Map arbitrary source-domain points to the reference domain.
         """
         assert self.W is not None, "aligner is not fitted"
         Zs = np.asarray(Z_src, dtype=np.float64)
@@ -171,16 +171,16 @@ def _orthogonal_procrustes_svd(X: np.ndarray,
                                allow_scale: bool = True,
                                allow_reflection: bool = True) -> Tuple[np.ndarray, float]:
     """
-    相似 Procrustes：给定中心化后的 X, Y，返回最优旋转 R 以及各向同性缩放 s（若允许）。
-    最小化 || s X R − Y ||_F。
+    Similarity Procrustes on centered X, Y: return optimal rotation R and isotropic scale s (if allowed).
+    Minimizes || s X R - Y ||_F.
     """
-    # X^T Y 的 SVD
+    # SVD of X^T Y
     U, S, VT = np.linalg.svd(X.T @ Y, full_matrices=False)
-    R = VT.T @ U.T  # 注意：R = V U^T（这里 VT 为 V^T）
-    # 控制是否允许镜像（反射），保证 det(R) >= 0
+    R = VT.T @ U.T  # R = V U^T (VT is V^T)
+    # Reflection control: ensure det(R) >= 0 when reflections disallowed
     if not allow_reflection:
         if np.linalg.det(R) < 0:
-            # 翻转最后一列的符号以消除反射
+            # Flip last column to remove reflection
             VT[-1, :] *= -1.0
             R = VT.T @ U.T
 
@@ -193,10 +193,10 @@ def _orthogonal_procrustes_svd(X: np.ndarray,
 
 class GPAConsensusAligner:
     """
-    将多视角 embedding 对齐到一个共同的“共识坐标系”（中心化后均值为 0 的形状）。
-    - 输入：每个视角在训练细胞上的坐标（必须配对同一批细胞），维度需一致。
-    - 输出：每个视角的相似变换参数（R_k, s_k, mu_k），以及共识形状 M。
-    - transform：将任意该视角的坐标映射到共识空间。
+    Align multi-view embeddings to a common consensus coordinate system (zero-mean shape after centering).
+    - Input: per-view coordinates on the same training cells (paired), same dimension d.
+    - Output: per-view similarity transform (R_k, s_k, mu_k) and consensus shape M.
+    - transform: map coordinates from a view into the consensus space.
     """
     name = "gpa_consensus"
 
@@ -208,12 +208,12 @@ class GPAConsensusAligner:
                  weights: Optional[Dict[str, float]] = None,
                  normalize_each_view: bool = True):
         """
-        参数：
-        - allow_scale: 是否允许各向同性缩放 s_k
-        - allow_reflection: 是否允许镜像（det(R_k) 可为负）；通常 False 只允许旋转
-        - max_iter/tol: GPA 迭代的最大步数与收敛阈值
-        - weights: 各视角在更新共识时的权重（默认等权）
-        - normalize_each_view: 每轮对齐时是否将各视角对齐后的形状做 Frobenius 归一，使数值更稳
+        Args:
+        - allow_scale: allow isotropic scale s_k per view
+        - allow_reflection: allow reflection (det(R_k) can be negative); often False = rotation only
+        - max_iter / tol: GPA iteration cap and convergence threshold
+        - weights: per-view weights when updating consensus (default equal)
+        - normalize_each_view: Frobenius-normalize each aligned view each round for stability
         """
         self.allow_scale = allow_scale
         self.allow_reflection = allow_reflection
@@ -222,14 +222,14 @@ class GPAConsensusAligner:
         self.weights = weights or {}
         self.normalize_each_view = normalize_each_view
 
-        # 拟合后的参数
+        # Fitted state
         self.views_: List[str] = []
-        self.mu_: Dict[str, np.ndarray] = {}     # 每视角训练集均值（中心化用）
-        self.R_: Dict[str, np.ndarray] = {}      # 旋转
-        self.s_: Dict[str, float] = {}           # 缩放
-        self.M_: Optional[np.ndarray] = None     # 共识形状（中心化）
-        self.residuals_: Dict[str, float] = {}   # 归一化 Procrustes 残差
-        self.default_view: Optional[str] = None  # 设置一个默认视角
+        self.mu_: Dict[str, np.ndarray] = {}     # per-view training means (for centering)
+        self.R_: Dict[str, np.ndarray] = {}      # rotations
+        self.s_: Dict[str, float] = {}           # scales
+        self.M_: Optional[np.ndarray] = None     # consensus shape (centered)
+        self.residuals_: Dict[str, float] = {}   # normalized Procrustes distortion
+        self.default_view: Optional[str] = None  # default view for transform()
     
 
     def set_default_view(self, name: str):
@@ -242,13 +242,13 @@ class GPAConsensusAligner:
 
     def fit(self, Z_train: Dict[str, np.ndarray]) -> "GPAConsensusAligner":
         """
-        Z_train: dict[name -> (n_cells_train, d)]。每个视角的训练数据，必须是同一批细胞的配对坐标。
-        所有视角的维度 d 必须一致，n_cells_train 应一致。
+        Z_train: dict[str, (n_cells_train, d)]. Training coordinates per view for the same cells, paired.
+        All views must share the same d and n_cells_train.
         """
         if not Z_train:
             raise ValueError("Z_train is empty.")
 
-        # 视角名列表与检查
+        # View names and checks
         self.views_ = list(Z_train.keys())
         n_cells, d = None, None
         for name, Z in Z_train.items():
@@ -263,9 +263,9 @@ class GPAConsensusAligner:
                     raise AssertionError("All views must share (n_cells, d).")
             Zc, mu = _center(Z)
             self.mu_[name] = mu
-            Z_train[name] = Zc  # 替换为中心化后的数据，后续都在零均值空间工作
+            Z_train[name] = Zc  # work in zero-mean space
 
-        # 初始化共识形状 M：简单平均（可选做 Frobenius 归一）
+        # Init consensus M: weighted average (optional Frobenius norm)
         M = np.zeros((n_cells, d), dtype=np.float64)
         total_w = 0.0
         for name, Zc in Z_train.items():
@@ -274,20 +274,20 @@ class GPAConsensusAligner:
             total_w += w
         M /= (total_w if total_w > 0 else len(self.views_))
 
-        # GPA 迭代
+        # GPA iterations
         last_obj = np.inf
         for it in range(self.max_iter):
             aligned_sum = np.zeros_like(M)
             total_w = 0.0
 
-            # 对每个视角，求最优 R_k, s_k，使 s_k X_k R_k ≈ M
+            # Per view: best R_k, s_k s.t. s_k X_k R_k ~ M
             for name, X in Z_train.items():
                 R, s = _orthogonal_procrustes_svd(
                     X, M, allow_scale=self.allow_scale, allow_reflection=self.allow_reflection
                 )
                 self.R_[name] = R
                 self.s_[name] = s
-                X_aligned = (X @ R) * s  # 中心化后数据的对齐结果（仍是中心化形状）
+                X_aligned = (X @ R) * s  # aligned centered shape
                 if self.normalize_each_view:
                     nf = _fro_norm(X_aligned)
                     if nf > 0:
@@ -296,10 +296,10 @@ class GPAConsensusAligner:
                 aligned_sum += w * X_aligned
                 total_w += w
 
-            # 更新共识 M
+            # Update consensus M
             M_new = aligned_sum / (total_w if total_w > 0 else len(self.views_))
 
-            # 目标函数：总残差 || sX R − M_new ||_F^2 的加权和
+            # Weighted sum of squared Procrustes errors || s X R - M_new ||_F^2
             obj = 0.0
             for name, X in Z_train.items():
                 X_aligned = (X @ self.R_[name]) * self.s_[name]
@@ -311,7 +311,7 @@ class GPAConsensusAligner:
                 w = float(self.weights.get(name, 1.0))
                 obj += w * (_fro_norm(diff) ** 2)
 
-            # 收敛判据：目标函数改善很小或 M 变化很小
+            # Convergence: small objective improvement and small M change
             rel_improve = (last_obj - obj) / (abs(last_obj) + 1e-12)
             delta_M = _fro_norm(M_new - M) / ( _fro_norm(M) + 1e-12 )
             M = M_new
@@ -319,10 +319,10 @@ class GPAConsensusAligner:
                 break
             last_obj = obj
 
-        # 固定最终共识形状
+        # Final consensus
         self.M_ = M
 
-        # 计算每视角的归一化 Procrustes 残差（失真）： || sX R − M ||_F^2 / ||M||_F^2
+        # Normalized per-view Procrustes residual: || sX R - M ||_F^2 / ||M||_F^2
         denom = _fro_norm(self.M_) ** 2 + 1e-12
         for name, X in Z_train.items():
             X_aligned = (X @ self.R_[name]) * self.s_[name]
@@ -341,8 +341,8 @@ class GPAConsensusAligner:
 
     def transform_one(self, name: str, Z: np.ndarray) -> np.ndarray:
         """
-        将某个视角的任意样本（训练或测试）映射到共识空间（中心化形状）。
-        输出与共识形状同域（均值为 0）。如需加回总体均值，可在外层自行加 0（共识均值即 0）。
+        Map samples from one view (train or test) to consensus space (centered shape).
+        Output is in the same domain as the consensus (mean 0). Add a global mean outside if needed.
         """
         if name not in self.views_:
             raise KeyError(f"Unknown view '{name}'.")
@@ -351,23 +351,23 @@ class GPAConsensusAligner:
         Z = np.asarray(Z, dtype=np.float64)
         if Z.shape[1] != self.M_.shape[1]:
             raise AssertionError("Dim mismatch: Z has different feature dim than consensus.")
-        Zc = Z - self.mu_[name]  # 使用训练时的均值进行中心化
+        Zc = Z - self.mu_[name]  # center with training means
         Z_aligned = (Zc @ self.R_[name]) * self.s_[name]
         if self.normalize_each_view:
             nf = _fro_norm(Z_aligned)
             if nf > 0:
                 Z_aligned = Z_aligned / nf
-        return Z_aligned  # 共识空间坐标，中心化后均值为 0
+        return Z_aligned  # consensus coordinates, mean 0
     
     def transform(self, Z: np.ndarray) -> np.ndarray:
         """
-        无需传 name；使用默认视角或唯一视角进行转换。
-        - 若仅有一个视角，自动用它；
-        - 若有多个视角，需先 set_default_view(name)。
+        No view name: use the default or the only available view.
+        - Single view: use it automatically;
+        - Multiple views: call set_default_view(name) first.
         """
         if self.M_ is None:
             raise AssertionError("Aligner not fitted.")
-        # 优先使用已有默认视角；否则若仅有一个视角则使用它；否则报错
+        # Prefer default; else single view; else error
         use_name = self.default_view
         if use_name is None:
             if len(self.views_) == 1:
@@ -383,7 +383,7 @@ class GPAConsensusAligner:
 
     def transform_all(self, Z_dict: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         """
-        对所有视角进行对齐，返回映射到共识空间的坐标字典。
+        Align all views; return a dict of coordinates in consensus space.
         """
         out = {}
         for name, Z in Z_dict.items():
@@ -393,7 +393,7 @@ class GPAConsensusAligner:
 
     def info(self) -> Dict[str, Any]:
         """
-        返回基本信息与每视角的 det(R)、s、残差等。
+        Summary: det(R), s, residuals per view, etc.
         """
         dets = {n: float(np.linalg.det(self.R_[n])) for n in self.views_}
         return {
@@ -410,7 +410,7 @@ class GPAConsensusAligner:
 
     def save(self, path: str):
         """
-        保存拟合后的对齐器（含变换参数与均值、共识形状）。
+        Save fitted aligner (transforms, means, consensus shape).
         """
         state = {
             "allow_scale": self.allow_scale,
@@ -449,13 +449,13 @@ class GPAConsensusAligner:
         return obj
 
 
-# 可选：邻域保持/重合率（对齐失真度量之一）
+# Optional: neighborhood overlap (alignment quality / local topology)
 def knn_overlap_rate(X_orig: np.ndarray,
                      X_align: np.ndarray,
                      k: int = 15) -> float:
     """
-    计算简单的 kNN 重合率：在原生空间与对齐空间里，每个点的 k 近邻集合重合比例的平均。
-    用作快速的局部拓扑保持指标。X_orig 与 X_align 的行对应同一批样本。
+    Simple kNN overlap: mean Jaccard-like overlap of k-NN sets in original vs aligned space.
+    Fast local topology preservation check. Rows of X_orig and X_align must match 1:1.
     """
     from sklearn.neighbors import NearestNeighbors
     nn1 = NearestNeighbors(n_neighbors=k).fit(X_orig)
@@ -471,24 +471,24 @@ def knn_overlap_rate(X_orig: np.ndarray,
     return float(np.mean(overlaps))
 
 
-# 注册表/工厂
+# Registry / factory
 ALIGNER_REGISTRY = {
     "identity": IdentityAligner,
     "procrustes": ProcrustesAligner,
     'ridge': RidgeAligner,
     'gpa_consensus': GPAConsensusAligner
-    # 可后续扩展
+    # extend here
 }
 
 
 def make_aligner(name: str, **kwargs) -> BaseAligner:
     if name not in ALIGNER_REGISTRY:
-        raise ValueError(f"未知对齐策略: {name}")
+        raise ValueError(f"Unknown alignment strategy: {name}")
     return ALIGNER_REGISTRY[name](**kwargs)
 
 
 def save_aligner(aligner, out: str | Path):
-    # out 是目录（可相对）；自动转绝对并创建
+    # out is a directory (may be relative); resolve and create
     p = Path(out).expanduser()
     if not p.is_absolute():
         p = (Path.cwd() / p).resolve()

@@ -140,7 +140,7 @@ def generate_trajectories_sde(df, f_net, sf2m_score_model, device, exp_dir, all_
         
         sde_point_tensor = torch.tensor(np.array(sde_point_array, dtype=np.float32))
         sde_weight_tensor = torch.tensor(np.array(weight.detach().cpu().numpy(), dtype=np.float32))
-        for i in range(1, len(all_times)):  # 时间点
+        for i in range(1, len(all_times)):  # time index
             time_point = all_times[i]
             gt_data = torch.from_numpy(df[df['samples'] == time_point].iloc[:, 1:].values).float()
             a = np.ones((gt_data.shape[0],), dtype=np.float64) / gt_data.shape[0]
@@ -249,7 +249,7 @@ def generate_trajectories_sde_hold_start_out(df, f_net, sf2m_score_model, device
         
         sde_point_tensor = torch.tensor(np.array(sde_point_array, dtype=np.float32))
         sde_weight_tensor = torch.tensor(np.array(weight, dtype=np.float32))
-        for i in range(0, len(all_times)):  # 时间点
+        for i in range(0, len(all_times)):  # time index
             time_point = all_times[i]
             gt_data = torch.from_numpy(df[df['samples'] == time_point].iloc[:, 1:].values).float()
             a = np.ones((gt_data.shape[0],), dtype=np.float64) / gt_data.shape[0]
@@ -341,7 +341,6 @@ def compute_trajectories_action(df, f_net, sf2m_score_model, device, all_times, 
 
         dt = ts[1:] - ts[0:-1]
         action = 0.0
-        # 避免与外层循环变量重复，这里使用 time_idx
         for time_idx in range(len(ts)-1):
             this_t = ts[time_idx]
             this_x = sde_traj[time_idx]

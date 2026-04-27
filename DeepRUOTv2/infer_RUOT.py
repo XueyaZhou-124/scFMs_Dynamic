@@ -1,9 +1,9 @@
-# 负责生成计算metirc需要的数据
+# Generate outputs needed for metrics: sde_point_*.npy, sde_weight_*.npy, velocity.h5ad, etc.
 # sde_point_*.npy, sde_weight_*.npy
 
-# velocity.adata
+# velocity.h5ad
 
-# pesudotime.adata
+# pseudotime-related outputs (downstream)
 
 # type: ignore
 
@@ -93,9 +93,7 @@ class SDE_reverse(torch.nn.Module):
     
 
 def load_data_model(config, device):
-    """
-    加载数据和模型
-    """
+    """Load CSV data and trained FNet / score networks."""
     df = pd.read_csv(os.path.join(DATA_DIR, config['data']['file_path']))
     df = df.iloc[:, :config['data']['dim'] + 1]
     exp_dir = os.path.join(config['exp']['output_dir'], config['exp']['name'])
@@ -162,7 +160,7 @@ def generate_trajectory_point(df, f_net, sf2m_score_model, dim, exp_dir, sigma, 
     print(data_t0.shape)
     x0=data_t0.to(device)
     
-    # 从t0开始生成数据
+    # Roll out from t0
     results = []
     for run_idx in tqdm(range(num_runs)):
         SEED = run_idx
@@ -191,10 +189,10 @@ def generate_trajectory_point(df, f_net, sf2m_score_model, dim, exp_dir, sigma, 
                 sigma=sigma)
 
         ts = torch.linspace(0, n_times - 1, 100, device=device)
-        sde_traj, traj_lnw = euler_sdeint(sde, initial_state, dt=0.1, ts=ts) # 从data_t0出发生成采样轨迹
+        sde_traj, traj_lnw = euler_sdeint(sde, initial_state, dt=0.1, ts=ts)  # sample trajectories from t0
         sde_traj, traj_lnw = sde_traj.cpu(), traj_lnw.cpu()
 
-        sample_number = traject_sample_number  # 采样100条轨迹用于保存
+        sample_number = traject_sample_number  # number of trajectories to save
         sample_indices = random.sample(range(sde_traj.size(1)), sample_number)
         sampled_sde_trajec = sde_traj[:, sample_indices, :]
         sampled_sde_trajec = sampled_sde_trajec.tolist()
@@ -211,10 +209,9 @@ def generate_trajectory_point(df, f_net, sf2m_score_model, dim, exp_dir, sigma, 
         sde_point_np = sde_point.detach().cpu().numpy()
         sde_point_list = sde_point_np.tolist()
         sde_point_array = np.array(sde_point_list, dtype=object)
-        np.save(os.path.join(exp_dir, f'sde_point_{run_idx}.npy'), sde_point_array) # 生成point数据
+        np.save(os.path.join(exp_dir, f'sde_point_{run_idx}.npy'), sde_point_array)
         np.save(os.path.join(exp_dir, f'sde_weight_{run_idx}.npy'), weight.detach().cpu().numpy())
 
-        # 5.5 转为 numpy
         out = {
             "traj": sde_traj.detach().cpu().numpy(),  # (T,N,G)
             "lnw": traj_lnw.detach().cpu().numpy(),   # (T,N,1)
@@ -224,7 +221,6 @@ def generate_trajectory_point(df, f_net, sf2m_score_model, dim, exp_dir, sigma, 
         }
         results.append(out)
 
-        # 5.6 可选保存
         if output_dir is not None:
             np.savez(
                 os.path.join(output_dir, f"{file_prefix}_run_{run_idx}.npz"),
@@ -320,8 +316,7 @@ def generate_trajectories_sde_hold_start_out(df, f_net, sf2m_score_model, device
         sde_point_array = np.array(sde_point_list, dtype=object)
         np.save(os.path.join(exp_dir, f'sde_point_{run_idx}.npy'), sde_point_array)
         np.save(os.path.join(exp_dir, f'sde_weight_{run_idx}.npy'), weight)
-        # 5.5 转为 numpy
-        # 把reverse和forward的traj和lnw和ts拼接起来
+        # Concatenate reverse and forward traj, lnw, ts
         ts = torch.cat([ts_reverse.flip(0), ts_forward[1:]], dim=0)
         out = {
             "traj": sde_traj.detach().cpu().numpy(),  # (T,N,G)
@@ -332,7 +327,6 @@ def generate_trajectories_sde_hold_start_out(df, f_net, sf2m_score_model, device
         }
         results.append(out)
 
-        # 5.6 可选保存
         if output_dir is not None:
             np.savez(
                 os.path.join(output_dir, f"{file_prefix}_run_{run_idx}.npz"),
@@ -351,20 +345,16 @@ def main():
     parser.add_argument('--num_runs', type=int, required=True, help='Path to config file')
 
     args = parser.parse_args()
-    # 设备选择
     device = ('cuda' if torch.cuda.is_available() else 'cpu')
-    # 加载配置、数据、模型
     config = load_and_merge_config(args.config)
     print(config)
     df, f_net, sf2m_score_model, exp_dir = load_data_model(config, device)
     dim = config['data']['dim']
     num_runs = args.num_runs
-    # 进行inference，生成metirc所需数据并保存
     sigma = config['score_train']['sigma']
     use_mass = config['use_mass']
-    # 生成velocity数据
     adata = generate_velocity(df, f_net, dim, exp_dir, device=device)
-    # 生成trajectory数据
+    # Trajectory / point samples for metrics
     if config['data']['hold_one_out'] & (config['data']['hold_out'] == 0):
         all_times = sorted(df.samples.unique())
         results_hold_start_out = generate_trajectories_sde_hold_start_out(df, f_net, sf2m_score_model, device, exp_dir, all_times, sigma, use_mass, num_points=None, num_runs = num_runs, output_dir = exp_dir)

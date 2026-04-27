@@ -16,25 +16,23 @@ import pickle
 
 def ensure_ensembl_id(adata, gene_key):
     """
-    将 adata.var 中指定的 gene_key 列的基因名映射为 Ensembl ID。
-    
-    参数：
-        adata: AnnData 对象
-        gene_key: str，表示当前基因名使用的字段（例如 'gene_symbol'）
-        dict1: dict，symbol -> ensembl_id 的映射字典
+    Map gene names in adata.var[gene_key] to Ensembl IDs.
 
-    返回：
-        更新后的 adata，包含 adata.var['ensembl_id']
+    Args:
+        adata: AnnData
+        gene_key: column or 'index' for current gene symbols
+
+    Returns:
+        adata with adata.var['ensembl_id'] set; unmapped genes removed.
     """
     with open(ENSEMBL_DICTIONARY_FILE, 'rb') as fp:
         dict_id = pickle.load(fp)
 
-    # 如果 index 本身是 Ensembl ID（以 ENSG 开头），直接使用
+    # If index is already Ensembl (ENSG...), use as-is
     first_gene = adata.var.index[0]
     if isinstance(first_gene, str) and first_gene.startswith("ENSG"):
         adata.var['ensembl_id'] = adata.var.index.tolist()
     else:
-        # 否则通过 gene_key 和映射字典转换为 Ensembl ID
         if gene_key != 'index':
             adata.var['ensembl_id'] = [
                 dict_id.get(gene_symbol, np.nan) for gene_symbol in adata.var[gene_key]
@@ -44,15 +42,13 @@ def ensure_ensembl_id(adata, gene_key):
                 dict_id.get(gene_symbol, np.nan) for gene_symbol in adata.var.index.tolist()
             ]
 
-    # 去除无法映射的基因
     adata = adata[:, ~adata.var['ensembl_id'].isna()]
 
     return adata
 
 
 def ensure_n_counts(adata):
-    # 确保存在n_counts, 主要是seurat和sacany命名不同需要兼容
-    # 不存在则生成一个
+    # Ensure n_counts exists (Seurat vs Scanpy naming); create if missing
     if 'n_counts' not in adata.obs.columns:
         adata.obs['n_counts'] = adata.X.sum(axis=1)
     return adata
@@ -75,14 +71,13 @@ def run(config):
     adata = sc.read_h5ad(input_path)
 
     if species != 'human':
-        print('homologues convert')
+        print('Homologue conversion')
         assert os.path.exists(homo_path), f'species is not human, {homo_path} is not exist'
 
         print(f"Loading homologues data from {homo_path}")
-        homo_df = pd.read_table(homo_path) # 人同源基因转换
+        homo_df = pd.read_table(homo_path)  # human homologue table
 
-        # human gene symbol covert
-        print('human gene symbol covert')
+        print('Mapping to human Ensembl IDs')
         dict1 = dict(zip(homo_df['Gene name'], homo_df['Human gene stable ID']))
         if gene_key == 'index':
             adata.var['ensembl_id'] = [dict1.get(i, np.nan) for i in adata.var.index.tolist()]
@@ -99,13 +94,13 @@ def run(config):
 
     print('save preprocessed adata in', adata_file_path)
 
-    print('toknizing adata....')
+    print('Tokenizing AnnData...')
     
     if custom_attr_name_dict is None:
         custom_attr_name_dict = {}
         for i in adata.obs.keys():
             custom_attr_name_dict[i] = i
-    print('custtom attr name', custom_attr_name_dict)
+    print('custom attr name', custom_attr_name_dict)
     tk = TranscriptomeTokenizer(custom_attr_name_dict, nproc=6,)
 
     tokenized_cells, cell_metadata = tk.tokenize_anndata(adata_file_path = adata_file_path, target_sum = target_sum)
@@ -127,7 +122,6 @@ def main():
     print('ld:', ld_lib)
     breakpoint()
     pass
-
 
 if __name__ == '__main__':
     main()

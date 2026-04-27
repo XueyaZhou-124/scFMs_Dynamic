@@ -22,7 +22,7 @@ import argparse
 
 
 def load_benchmark_config(cfg_or_path):
-    # 支持直接传 dict 或 YAML 路径
+    # Accept either a dict or a path to a YAML file
     if isinstance(cfg_or_path, dict):
         return cfg_or_path
     with open(cfg_or_path, 'r') as f:
@@ -33,30 +33,30 @@ def validate_config(cfg):
     required_top = ["dataset", "paths", "models", "align_strategies", "metrics", "dynamic_methods"]
     for k in required_top:
         if k not in cfg:
-            raise ValueError(f"缺少配置项: {k}")
+            raise ValueError(f"Missing top-level config key: {k}")
     ds = cfg["dataset"]
     for k in ["name", "path", "ref_key", "time_key", "train_times", "test_times"]:
         if k not in ds:
-            raise ValueError(f"dataset 缺少配置项: {k}")
+            raise ValueError(f"Missing dataset config key: {k}")
     paths = cfg["paths"]
     for k in ["input_dir", "results_dir", "artifacts", "benchmark_results"]:
         if k not in paths:
-            raise ValueError(f"paths 缺少配置项: {k}")
+            raise ValueError(f"Missing paths config key: {k}")
 
-    # 验证 dynamic_methods
+    # Validate dynamic_methods
     if not cfg["dynamic_methods"]:
-        raise ValueError("dynamic_methods 不能为空")
+        raise ValueError("dynamic_methods must not be empty")
     for method in cfg["dynamic_methods"]:
         if "name" not in method:
-            raise ValueError("dynamic_methods 中每个方法必须有 'name' 字段")
+            raise ValueError("Each entry in dynamic_methods must have a 'name' field")
         if "engine_type" not in method:
-            raise ValueError(f"dynamic_methods.{method['name']} 缺少 'engine_type' 字段")
+            raise ValueError(f"dynamic_methods.{method['name']} is missing 'engine_type'")
         if "params" not in method:
-            raise ValueError(f"dynamic_methods.{method['name']} 缺少 'params' 字段")
+            raise ValueError(f"dynamic_methods.{method['name']} is missing 'params'")
         if "engine_config" not in method:
-            raise ValueError(f"dynamic_methods.{method['name']} 缺少 'engine_config' 字段")
+            raise ValueError(f"dynamic_methods.{method['name']} is missing 'engine_config'")
 
-    # 默认值
+    # Defaults
     cfg.setdefault("options", {})
     cfg["options"].setdefault("skip_existing", True)
     return cfg
@@ -64,8 +64,8 @@ def validate_config(cfg):
 
 def validate_adata_obsm_for_benchmark(cfg, adata):
     """
-    在跑大量 job 之前检查 benchmark.h5ad 是否包含 ref 与各 model 的 obsm。
-    避免每个组合都报一次「X_xxx 不存在于 adata.obsm」。
+    Before running many jobs, check that benchmark.h5ad has obsm for ref and each model.
+    Avoids repeating errors like "X_xxx is not in adata.obsm" for every combination.
     """
     ds = cfg["dataset"]
     ref_obsm = f"X_{ds['ref_key']}"
@@ -78,24 +78,24 @@ def validate_adata_obsm_for_benchmark(cfg, adata):
             str(k) for k in adata.obsm.keys() if str(k).startswith("X_")
         )
         raise ValueError(
-            "benchmark AnnData 缺少当前配置所需的 obsm："
-            f"{missing}\n以 X_ 开头的 obsm：{available}\n"
-            "请调整 cfg['models'] / dataset.ref_key 与整合后的 h5ad 一致，或重新运行 integrate_embedding。"
+            "Benchmark AnnData is missing required obsm for this config: "
+            f"{missing}\nobsm keys starting with X_: {available}\n"
+            "Align cfg['models'] / dataset.ref_key with the integrated h5ad, or rerun integrate_embedding."
         )
 
 
 def expand_jobs(cfg):
     """
-    返回所有组合的列表，每个条目包含 model + dynamic_method + method_params
+    Return the list of all job combinations, each with model + dynamic_method + method_params.
     """
     jobs = []
     for model in cfg["models"]:
         for method_cfg in cfg["dynamic_methods"]:
-            # 从 method_cfg["params"] 中提取参数网格
+            # Build parameter grid from method_cfg["params"]
             param_names = list(method_cfg["params"].keys())
             param_values = list(method_cfg["params"].values())
 
-            # 生成笛卡尔积
+            # Cartesian product
             for param_combo in product(*param_values):
                 job = {
                     "model": model,
@@ -120,8 +120,8 @@ def has_existing_runs(res_dir, pattern, expected_min=1):
 
 def build_context(cfg, adata=None):
     """
-    顺序执行时构建共享上下文：adata、times_all、可选字段等。
-    若传入 adata（例如 run_benchmark 已校验并复用），则不再读盘。
+    Build shared context for sequential runs: adata, times_all, optional fields, etc.
+    If adata is passed in (e.g. already validated in run_benchmark), do not re-read from disk.
     """
     if adata is None:
         adata = sc.read_h5ad(cfg["dataset"]["path"])
@@ -148,9 +148,9 @@ def build_context(cfg, adata=None):
 
 def execute_job(cfg, job, context=None):
     """
-    单任务执行（model + method + params）：预处理→训练/生成→读结果→对齐/评估。
-    - context 为顺序路径共享对象；并行路径传 None（内部独立加载）
-    返回：rows_by_metric（dict: metric->list[df]）、timing_rows（list[df]）
+    Run one job (model + method + params): preprocess -> train/generate -> load -> align/evaluate.
+    - context: shared object for sequential path; use None for parallel (each process loads data).
+    Returns: rows_by_metric (dict metric -> list[df]), timing_rows (list[df]).
     """
     ds = cfg["dataset"]
     paths = cfg["paths"]
@@ -165,9 +165,9 @@ def execute_job(cfg, job, context=None):
 
     t0_total = time.perf_counter()
 
-    # 构建数据与预处理器
+    # Build data and preprocessor
     if context is None:
-        # 并行或独立执行：各自读取，避免共享冲突
+        # Parallel or isolated: each process reads its own copy to avoid sharing issues
         adata = sc.read_h5ad(ds["path"])
         times_all = adata.obs[ds["time_key"]].to_numpy().astype(float)
         pseudotime_key = ds.get("pseudotime_key", None)
@@ -177,7 +177,7 @@ def execute_job(cfg, job, context=None):
         root_cell_type = ds.get("root_cell_type", None) if cell_types_key else None
 
     else:
-        # 顺序执行：复用共享数据
+        # Sequential: reuse shared data
         adata = context["adata"]
         times_all = context["times_all"]
         pseudotime = context["pseudotime"]
@@ -185,10 +185,10 @@ def execute_job(cfg, job, context=None):
         root_cell_type = context["root_cell_type"]
 
 
-    # 获取 dim 参数（通用）
+    # General dim parameter
     dim = int(params.get("dim", 50))
 
-    # 每个任务独立创建 emb_prep
+    # One EmbeddingPreprocessor per task
     emb_prep = EmbeddingPreprocessor(
         adata,
         ds["time_key"],
@@ -197,7 +197,7 @@ def execute_job(cfg, job, context=None):
         test_times=ds["test_times"]
     )
 
-    # 预处理
+    # Preprocess
     t0_prep = time.perf_counter()
     emb_prep.fit_ref(k=dim, store_key='Z_ref')
     emb_prep.fit_embedding(model_key=model, k=dim)
@@ -206,19 +206,19 @@ def execute_job(cfg, job, context=None):
     Z_ref_train = emb_prep.get_Z('ref', split='train')
     prep_sec = time.perf_counter() - t0_prep
 
-    # 构建 job 标识符（用于路径和命名）
+    # Job id for paths and naming
     test_times = ds["test_times"]
     ref_key = ds["ref_key"]
 
-    # 生成参数字符串
+    # Parameter string
     param_str = "_".join([f"{k}{v}" for k, v in sorted(params.items())])
     exp_name = f"{model}_holdt{test_times[0]}_{method_name}_{param_str}"
 
-    # 目录分层：results_dir/method_name/model/params/
+    # Directory layout: results_dir/method_name/model/params/
     out_dir_model = ensure_dir(os.path.join(paths["results_dir"], method_name, model, param_str))
     art_dir_model = ensure_dir(os.path.join(paths["artifacts"], method_name, model, param_str))
 
-    # 根据 engine_type 初始化引擎
+    # Init engine from engine_type
     if engine_type == "deepruot":
         engine = DeepRUOTEngine(
             train_script=engine_config["train_script"],
@@ -230,7 +230,7 @@ def execute_job(cfg, job, context=None):
         run_pattern = engine_config.get("run_pattern", "run_*.npz")
         num_runs = int(engine_config.get("num_runs", 10))
     else:
-        raise ValueError(f"不支持的 engine_type: {engine_type}")
+        raise ValueError(f"Unsupported engine_type: {engine_type}")
 
     skip_existing = cfg["options"].get("skip_existing", True)
 
@@ -240,9 +240,9 @@ def execute_job(cfg, job, context=None):
     if not (skip_existing and has_existing_runs(os.path.join(out_dir_model, exp_name), run_pattern, expected_min=num_runs)):
         t0_fit = time.perf_counter()
 
-        # 根据不同引擎传递不同参数
+        # Engine-specific arguments
         if engine_type == "deepruot":
-            # DeepRUOT 特有参数
+            # DeepRUOT-specific
             otmode = params.get("otmode", "ruot")
             cfg_path = engine.fit(
                 data={"Z": Z_model_all, "t": times_all, "hold_out": test_times[0], "data_dir": paths["input_dir"]},
@@ -257,23 +257,23 @@ def execute_job(cfg, job, context=None):
     else:
         res_dir = os.path.join(out_dir_model, exp_name)
 
-    # 读结果
+    # Load results
     t0_io = time.perf_counter()
     runs = load_runs_npz(res_dir, pattern=run_pattern)
     vel_path = os.path.join(res_dir, 'velocity.h5ad')
     velocity_adata = sc.read_h5ad(vel_path) if os.path.exists(vel_path) else None
     io_sec = time.perf_counter() - t0_io
 
-    # 对齐 + 评估
+    # Align + evaluate
     rows_by_metric = {m: [] for m in metrics}
-    timing_rows = []  # 每个 aligner 一行 timing
+    timing_rows = []  # one timing row per aligner
 
     for align_name in align_strategies:
 
-        # 如果 gpa align，在这里构建所有 model 的共识空间作为参考空间
+        # For GPA consensus, build shared space from all models as reference
         if align_name == 'gpa_consensus':
             aligner = make_aligner(align_name)
-            # 与 cfg['models'] 一致，避免整合子集时仍硬编码全模型名
+            # Match cfg['models'] so a subset of models is not hard-coded
             allmodels = list(cfg["models"])
             for _m in allmodels:
                 emb_prep.fit_embedding(model_key=_m, k=dim)
@@ -281,10 +281,10 @@ def execute_job(cfg, job, context=None):
             aligner.fit(Z_train_allmodels) 
             aligner.save(os.path.join(art_dir_model, 'gpa.joblib'))
             model = job['model']
-            aligner.set_default_view(model) # 设置用这个 model 的视角
+            aligner.set_default_view(model)  # use this model's view
         else:
             aligner = make_aligner(align_name)
-            aligner.fit(Z_model_train, Z_ref_train) #只在训练集拟合aligner
+            aligner.fit(Z_model_train, Z_ref_train)  # fit only on training cells
             save_aligner(aligner, art_dir_model)
 
         evaluator = AlignmnetEvaluator(
@@ -312,7 +312,7 @@ def execute_job(cfg, job, context=None):
                 dfm.insert(0, 'tag', tag)
             rows_by_metric[m].append(dfm)
 
-        # 构建 timing row，包含所有参数
+        # Timing row with all parameters
         timing_row = {
             "tag": tag,
             "model": model,
@@ -325,7 +325,6 @@ def execute_job(cfg, job, context=None):
             "eval_sec": eval_sec,
             "total_sec": (time.perf_counter() - t0_total),
         }
-        # 添加所有方法参数
         timing_row.update(params)
         timing_rows.append(pd.DataFrame([timing_row]))
 
@@ -334,7 +333,7 @@ def execute_job(cfg, job, context=None):
 
 def run_benchmark(benchmark_config, max_workers=None, save_path=None):
     """
-    支持顺序与并行的批量运行；聚合指标与任务用时。
+    Batch run (sequential or parallel); aggregate metrics and per-task timing.
     """
     cfg = validate_config(load_benchmark_config(benchmark_config))
     jobs = expand_jobs(cfg)
@@ -342,18 +341,15 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
     adata0 = sc.read_h5ad(cfg["dataset"]["path"])
     validate_adata_obsm_for_benchmark(cfg, adata0)
 
-    # 如果未显式传入，读取配置中的 options.max_workers
     if max_workers is None:
         max_workers = int(cfg.get("options", {}).get("max_workers", 1))
 
     if max_workers > 1:
         del adata0
 
-    # 如果通过参数传入 save_path，则覆盖配置文件中的 benchmark_results
     if save_path is not None:
         cfg["paths"]["benchmark_results"] = save_path
 
-    # 汇总表现
     all_rows = {m: [] for m in cfg["metrics"]}
     all_timing = []
 
@@ -365,13 +361,13 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
             all_timing.extend(timing_rows)
 
     if max_workers <= 1:
-        # 顺序：构建共享上下文，提高效率（复用已校验的 adata）
+        # Sequential: shared context (reuse validated adata)
         context = build_context(cfg, adata=adata0)
         for job in jobs:
             rows_by_metric, timing_rows = execute_job(cfg, job, context=context)
             merge_rows(rows_by_metric, timing_rows)
     else:
-        # 并行：每个进程独立执行
+        # Parallel: each process runs independently
         with ProcessPoolExecutor(max_workers=max_workers) as ex:
             futures = {ex.submit(execute_job, cfg, job, None): job for job in jobs}
             for fut in as_completed(futures):
@@ -383,7 +379,6 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
                 except Exception as e:
                     print(f"failed: {job['model']} {job['method_name']} {job['params']} -> {e}")
 
-    # 保存指标 CSV
     ensure_dir(cfg["paths"]["benchmark_results"])
     for m in cfg["metrics"]:
         if all_rows[m]:
@@ -391,7 +386,6 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
             out_file = os.path.join(cfg["paths"]["benchmark_results"], f"{m}.csv")
             out_df.to_csv(out_file, index=False)
 
-    # 保存 timing CSV
     if all_timing:
         timing_df = pd.concat(all_timing, axis=0, ignore_index=True)
         timing_file = os.path.join(cfg["paths"]["benchmark_results"], "timing.csv")
@@ -409,7 +403,7 @@ if __name__ == '__main__':
     if args.config:
         run_benchmark(args.config, save_path=args.save_path)
     else:
-        # 示例配置（可直接运行）
+        # Example config (runnable)
         demo_cfg = {
             "dataset": {
                 "name": "EMT",
@@ -443,10 +437,10 @@ if __name__ == '__main__':
                         ),
                         "python_exec": "python",
                         "num_runs": 10,
-                        "run_pattern": "sde_run_*.npz" # DeepRUOT 生成的文件匹配
+                        "run_pattern": "sde_run_*.npz"  # glob for DeepRUOT output npz files
                     }
                 }
-                # 未来可以添加其他动力学方法：
+                # Future: other dynamics methods, e.g.
                 # {
                 #     "name": "wot",
                 #     "engine_type": "wot",

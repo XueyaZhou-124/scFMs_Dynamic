@@ -5,12 +5,12 @@ import numpy as np
 
 
 def save_config(config, path):
-    """将config保存为yaml文件"""
+    """Write config to a YAML file."""
     with open(path, 'w') as f:
         yaml.safe_dump(config, f, allow_unicode=True)
 
 def load_benchmark_config(cfg_or_path):
-    # 支持直接传 dict 或 YAML 路径
+    # Accept a dict or a path to a YAML file
     if isinstance(cfg_or_path, dict):
         return cfg_or_path
     with open(cfg_or_path, 'r') as f:
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     for test_time in all_times:
         config = base_config.copy()
         if (ref == 'hvg') & (test_time == all_times[-1]) & (alignment is None): 
-            continue # hvg 的最后一个时间点跳过
+            continue  # skip last timepoint for hvg baseline
         else:
             config['dataset']['test_times'] = [test_time]
             config['dataset']['ref_key'] = ref
@@ -64,7 +64,6 @@ if __name__ == '__main__':
             if ref != 'hvg':
                 config['paths']['artifacts'] = f'/macroverse/public/zhouxy/scllms/scFMs_dynamic/artifacts/{dataset_name}_holdt{test_time}_ref{ref}'
                 config['paths']['benchmark_results'] = f'/macroverse/public/zhouxy/scllms/scFMs_dynamic/results/{dataset_name}_holdt{test_time}_ref{ref}'
-                # 保存config到yaml文件
                 save_path = os.path.join(generated_path, f"{dataset_name}_benchmark_holdt{test_time}_config_ref{ref}.yaml")
             else:
                 config['paths']['artifacts'] = f'/macroverse/public/zhouxy/scllms/scFMs_dynamic/artifacts/{dataset_name}_holdt{test_time}'
@@ -81,7 +80,7 @@ if __name__ == '__main__':
                     config['dynamic_methods'][0]['params']['dim'] = [10]
                     config['dynamic_methods'][0]['params']['otmode'] = ['ruot']
                     config['dataset']['harmony_lamb'] = 0.5
-                    for lamb in np.linspace(0.5, 2, 16): # 生成lambda 配置
+                    for lamb in np.linspace(0.5, 2, 16):
                         lamb = round(lamb, 1)
                         config['dataset']['harmony_lamb'] = float(lamb)
                         config['paths']['artifacts'] = f'/macroverse/public/zhouxy/scllms/scFMs_dynamic/artifacts/harmony/{dataset_name}_holdt{test_time}_lamb{str(lamb)}'
