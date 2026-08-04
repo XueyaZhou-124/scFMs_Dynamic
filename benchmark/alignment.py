@@ -227,6 +227,7 @@ class GPAConsensusAligner:
         self.mu_: Dict[str, np.ndarray] = {}     # per-view training means (for centering)
         self.R_: Dict[str, np.ndarray] = {}      # rotations
         self.s_: Dict[str, float] = {}           # scales
+        self.norm_: Dict[str, float] = {}        # fixed per-view normalization from fit set
         self.M_: Optional[np.ndarray] = None     # consensus shape (centered)
         self.residuals_: Dict[str, float] = {}   # normalized Procrustes distortion
         self.default_view: Optional[str] = None  # default view for transform()
@@ -328,8 +329,12 @@ class GPAConsensusAligner:
             X_aligned = (X @ self.R_[name]) * self.s_[name]
             if self.normalize_each_view:
                 nf = _fro_norm(X_aligned)
-                if nf > 0:
-                    X_aligned = X_aligned / nf
+                # Persist a fixed normalization learned on training data.
+                # This keeps transform() deterministic across different input batch sizes.
+                self.norm_[name] = float(nf) if nf > 0 else 1.0
+                X_aligned = X_aligned / self.norm_[name]
+            else:
+                self.norm_[name] = 1.0
             sse = _fro_norm(X_aligned - self.M_) ** 2
             self.residuals_[name] = float(sse / denom)
 
@@ -354,9 +359,14 @@ class GPAConsensusAligner:
         Zc = Z - self.mu_[name]  # center with training means
         Z_aligned = (Zc @ self.R_[name]) * self.s_[name]
         if self.normalize_each_view:
-            nf = _fro_norm(Z_aligned)
-            if nf > 0:
-                Z_aligned = Z_aligned / nf
+            # Use fixed training-set normalization (not per-call normalization).
+            # For legacy checkpoints without norm_, fall back to historical behavior.
+            if name in self.norm_:
+                Z_aligned = Z_aligned / max(float(self.norm_[name]), 1e-12)
+            else:
+                nf = _fro_norm(Z_aligned)
+                if nf > 0:
+                    Z_aligned = Z_aligned / nf
         return Z_aligned  # consensus coordinates, mean 0
     
     def transform(self, Z: np.ndarray) -> np.ndarray:
@@ -402,6 +412,7 @@ class GPAConsensusAligner:
             "allow_scale": self.allow_scale,
             "allow_reflection": self.allow_reflection,
             "normalize_each_view": self.normalize_each_view,
+            "fixed_norm": self.norm_,
             "residuals": self.residuals_,
             "detR": dets,
             "s": self.s_,
@@ -423,6 +434,7 @@ class GPAConsensusAligner:
             "mu_": self.mu_,
             "R_": self.R_,
             "s_": self.s_,
+            "norm_": self.norm_,
             "M_": self.M_,
             "residuals_": self.residuals_,
         }
@@ -444,6 +456,7 @@ class GPAConsensusAligner:
         obj.mu_ = state["mu_"]
         obj.R_ = state["R_"]
         obj.s_ = state["s_"]
+        obj.norm_ = state.get("norm_", {name: 1.0 for name in obj.views_})
         obj.M_ = state["M_"]
         obj.residuals_ = state["residuals_"]
         return obj

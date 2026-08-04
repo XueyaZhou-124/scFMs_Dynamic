@@ -1,0 +1,25 @@
+model: scvi
+task_name: EMT
+
+data:
+  input_path: ./data/raw/emt.h5ad
+
+embedding:
+  # Optional: if your AnnData has raw counts stored in a layer, set it here.
+  # count_layer: counts
+  batch_key: Time
+  n_latent: 50
+  n_layers: 2
+  n_hidden: 128
+  dropout_rate: 0.1
+  gene_likelihood: nb
+  max_epochs: 200
+  batch_size: 256
+  seed: 0
+  select_col: ["Time", "Phase", "Pseudotime"]
+
+evaluate:
+  emb_dim: 50
+  labels: ["Phase", "Time"]
+  umap_keys: ["Phase", "Time"]
+  batch_key: "Phase"

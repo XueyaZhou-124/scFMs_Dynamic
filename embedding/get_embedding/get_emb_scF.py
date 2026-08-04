@@ -89,6 +89,10 @@ def main_gene_selection(X_df, gene_list):
         adata_new->`~anndata.AnnData` object
         to_fill_columns->list: zero padding gene
     """
+    X_df = X_df.loc[:, pd.notna(X_df.columns)]
+    if X_df.columns.has_duplicates:
+        X_df = X_df.T.groupby(level=0).mean().T
+
     to_fill_columns = list(set(gene_list) - set(X_df.columns))
     padding_df = pd.DataFrame(np.zeros((X_df.shape[0], len(to_fill_columns))), 
                               columns=to_fill_columns, 
@@ -136,7 +140,7 @@ def main(args):
         if issparse(gexpr_feature.X):
             gexpr_feature = gexpr_feature.X.toarray()
         else:
-            gexpr_feature = gexpr_feature
+            gexpr_feature = gexpr_feature.X
         gexpr_feature = pd.DataFrame(gexpr_feature,index=idx,columns=col)
 
     elif args.data_path[-3:]=='npy':
@@ -145,7 +149,7 @@ def main(args):
     else:
         gexpr_feature=pd.read_csv(args.data_path,index_col=0)
     
-    if gexpr_feature.shape[1]<19264:
+    if gexpr_feature.shape[1] != 19264:
         print('Convert gene features to fixed 19264-dim input')
         gexpr_feature, to_fill_columns,var = main_gene_selection(gexpr_feature,gene_list)
         assert gexpr_feature.shape[1]>=19264

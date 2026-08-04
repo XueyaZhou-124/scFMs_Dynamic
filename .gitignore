@@ -6,6 +6,9 @@ data/*
 !data/raw/**
 results/
 artifacts/
+logs/
+tmp_benchmark_config/
+temp.toml
 
 # User-downloaded weights (never commit)
 pretrained_models/
@@ -59,10 +62,33 @@ lightning_logs/
 
 # environment
 .pixi/
+.fake_cuda/
+.pytest_cache/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 __MACOSX/
+
+# Generated manuscript figure outputs (source notebooks/scripts remain trackable)
+main_figures/**/*.pdf
+main_figures/**/*.png
+main_figures/**/*.svg
+main_figures/**/*.tif
+main_figures/**/*.tiff
+main_figures/*.executed.ipynb
+main_figures/fig*/
+main_figures/true_vs_pred*/
+
+# Generated revision benchmark configs; add stable configs explicitly when public.
+configs/benchmark_config/downsample/
+configs/benchmark_config/downsample_ebdata/
+configs/benchmark_config/synthetic/
+configs/benchmark_config/synthetic_branching_controlled/
+configs/emb_configs/downsample/
+configs/emb_configs/downsample_ebdata/
+configs/emb_configs/synthetic/
+configs/emb_configs/synthetic_branching_controlled/
+data/raw/synthetic_branching/
 
 # DeepRUOT training / run logs (regenerated locally)
 DeepRUOTv2/logs/

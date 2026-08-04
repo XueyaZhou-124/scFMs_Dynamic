@@ -23,6 +23,10 @@ def main_gene_selection(X_df, gene_list):
             adata_new->`~anndata.AnnData` object
             to_fill_columns->list: zero padding gene
         """
+        X_df = X_df.loc[:, pd.notna(X_df.columns)]
+        if X_df.columns.has_duplicates:
+            X_df = X_df.T.groupby(level=0).mean().T
+
         to_fill_columns = list(set(gene_list) - set(X_df.columns))
         padding_df = pd.DataFrame(np.zeros((X_df.shape[0], len(to_fill_columns))), 
                                 columns=to_fill_columns, 

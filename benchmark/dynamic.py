@@ -106,7 +106,13 @@ class DeepRUOTEngine(BaseRunner):
             deep_update(self.file_layout, file_layout)
 
     # ----- training -----
-    def fit(self, data: Dict[str, Any], config: Dict[str, Any], otmode: str) -> Dict[str, Any]:
+    def fit(
+        self,
+        data: Dict[str, Any],
+        config: Dict[str, Any],
+        otmode: str,
+        config_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         Z = np.asarray(data["Z"], dtype=np.float32)
         t = np.asarray(data["t"], dtype=float)
         assert Z.shape[0] == t.shape[0], "Z and t must have the same number of rows"
@@ -142,6 +148,13 @@ class DeepRUOTEngine(BaseRunner):
 
         cfg = deep_update(deep_update(dict(tpl), dict(base)), overrides)
         cfg = self.update_otconfig(cfg, otmode)
+        if config_overrides:
+            cfg = deep_update(cfg, config_overrides)
+        cfg = self._adapt_sampling_config(
+            cfg=cfg,
+            t=t,
+            hold_out=to_scalar(data["hold_out"]) if "hold_out" in data else None,
+        )
         cfg_path = os.path.join(out_dir, f"{cfg['exp']['name']}.yaml")
         save_yaml(cfg, cfg_path)
 
@@ -232,6 +245,44 @@ class DeepRUOTEngine(BaseRunner):
             config['score_train']['sigma'] = 0.1
 
         return config
+
+    def _adapt_sampling_config(
+        self,
+        cfg: Dict[str, Any],
+        t: np.ndarray,
+        hold_out: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Cap sample_size/score_batch_size by available cells per (training) timepoint.
+        This prevents DeepRUOT failures in low-data downsampling regimes when
+        sample_with_replacement=False and sample_size > group population.
+        """
+        if t.size == 0:
+            return cfg
+
+        uniq, counts = np.unique(t, return_counts=True)
+        if hold_out is not None:
+            train_counts = counts[uniq != hold_out]
+            if train_counts.size == 0:
+                train_counts = counts
+        else:
+            train_counts = counts
+
+        min_cells = int(np.min(train_counts))
+        if min_cells <= 0:
+            return cfg
+
+        original_sample_size = int(cfg.get("sample_size", min_cells))
+        adaptive_sample_size = max(1, min(original_sample_size, min_cells))
+        cfg["sample_size"] = adaptive_sample_size
+
+        if isinstance(cfg.get("score_train"), dict):
+            original_score_bs = int(cfg["score_train"].get("score_batch_size", adaptive_sample_size))
+            cfg["score_train"]["score_batch_size"] = max(
+                1, min(original_score_bs, adaptive_sample_size)
+            )
+
+        return cfg
 
 
     def _run_cli(self, script: str, cfg_path: str, log_path: str, extra_args: Optional[Sequence[str]] = None):

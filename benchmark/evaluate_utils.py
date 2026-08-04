@@ -370,13 +370,18 @@ class AlignmnetEvaluator:
             ValueError 
             # df = df.rename(columns={df.columns[0]: 'samples'})
 
+        # Align GT once so W1/TMV are computed in the same aligned space.
+        align_model = aligner
+        df_aligned = df.copy(deep=True)
+        gt_data = df.iloc[:, 1:].values.astype(float)
+        df_aligned.iloc[:, 1:] = align_model.transform(gt_data)
+
         all_results = []
         for run_idx in range(len(self.results)):
             res = self.results[run_idx]
             sde_point_array = res['point']
             weight = res['weight']
 
-            align_model = aligner
             sde_point_array_aligned = []
 
             for sde_points in sde_point_array:
@@ -385,7 +390,7 @@ class AlignmnetEvaluator:
             sde_point_array = sde_point_array_aligned
 
             results = self.calculators['w1tmv'].calculate(
-                df=df,
+                df=df_aligned,
                 all_times=test_times,
                 sde_point_array=sde_point_array,
                 weight=weight,

@@ -44,6 +44,12 @@ class HvgStrategy(BaseStrategy):
         print('normalize...')
         sc.pp.normalize_total(adata)
         sc.pp.log1p(adata)
+        if batch_key is not None:
+            if batch_key not in adata.obs.columns:
+                raise KeyError(f"HVG batch_key '{batch_key}' not found in adata.obs")
+            # scanpy highly_variable_genes(batched) expects categorical batches.
+            if not pd.api.types.is_categorical_dtype(adata.obs[batch_key]):
+                adata.obs[batch_key] = adata.obs[batch_key].astype("category")
         print(f"Selecting top {n_top_genes} highly variable genes...")
         sc.pp.highly_variable_genes(adata, n_top_genes=n_top_genes, batch_key=batch_key, subset = True)
 

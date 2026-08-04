@@ -108,6 +108,17 @@ def expand_jobs(cfg):
     return jobs
 
 
+def deepruot_config_overrides(params):
+    """
+    Convert benchmark-grid convenience parameters into nested DeepRUOT config keys.
+    The original params stay in tags/timing CSVs for traceability.
+    """
+    overrides = {}
+    if "score_sigma" in params:
+        overrides.setdefault("score_train", {})["sigma"] = float(params["score_sigma"])
+    return overrides
+
+
 def ensure_dir(p):
     os.makedirs(p, exist_ok=True)
     return p
@@ -156,6 +167,7 @@ def execute_job(cfg, job, context=None):
     paths = cfg["paths"]
     metrics = cfg["metrics"]
     align_strategies = cfg["align_strategies"]
+    aligner_kwargs_cfg = cfg.get("aligner_kwargs", {})
 
     model = job["model"]
     method_name = job["method_name"]
@@ -247,7 +259,8 @@ def execute_job(cfg, job, context=None):
             cfg_path = engine.fit(
                 data={"Z": Z_model_all, "t": times_all, "hold_out": test_times[0], "data_dir": paths["input_dir"]},
                 otmode=otmode,
-                config={"exp": {"name": exp_name, "output_dir": out_dir_model}}
+                config={"exp": {"name": exp_name, "output_dir": out_dir_model}},
+                config_overrides=deepruot_config_overrides(params),
             )
         fit_sec = time.perf_counter() - t0_fit
 
@@ -271,8 +284,10 @@ def execute_job(cfg, job, context=None):
     for align_name in align_strategies:
 
         # For GPA consensus, build shared space from all models as reference
+        aligner_kwargs = aligner_kwargs_cfg.get(align_name, {}) or {}
+
         if align_name == 'gpa_consensus':
-            aligner = make_aligner(align_name)
+            aligner = make_aligner(align_name, **aligner_kwargs)
             # Match cfg['models'] so a subset of models is not hard-coded
             allmodels = list(cfg["models"])
             for _m in allmodels:
@@ -283,7 +298,7 @@ def execute_job(cfg, job, context=None):
             model = job['model']
             aligner.set_default_view(model)  # use this model's view
         else:
-            aligner = make_aligner(align_name)
+            aligner = make_aligner(align_name, **aligner_kwargs)
             aligner.fit(Z_model_train, Z_ref_train)  # fit only on training cells
             save_aligner(aligner, art_dir_model)
 
@@ -331,6 +346,22 @@ def execute_job(cfg, job, context=None):
     return rows_by_metric, timing_rows
 
 
+def raise_worker_failures(failures):
+    """Raise one final error after all parallel worker failures are collected."""
+    if not failures:
+        return
+    details = []
+    for job, error in failures:
+        details.append(
+            f"{job['model']} {job['method_name']} {job['params']}: "
+            f"{type(error).__name__}: {error}"
+        )
+    raise RuntimeError(
+        f"{len(failures)} benchmark worker(s) failed after collection: "
+        + " | ".join(details)
+    )
+
+
 def run_benchmark(benchmark_config, max_workers=None, save_path=None):
     """
     Batch run (sequential or parallel); aggregate metrics and per-task timing.
@@ -352,6 +383,7 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
 
     all_rows = {m: [] for m in cfg["metrics"]}
     all_timing = []
+    worker_failures = []
 
     def merge_rows(rows_by_metric, timing_rows):
         if rows_by_metric:
@@ -378,6 +410,7 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
                     print(f"done: {job['model']} {job['method_name']} {job['params']}")
                 except Exception as e:
                     print(f"failed: {job['model']} {job['method_name']} {job['params']} -> {e}")
+                    worker_failures.append((job, e))
 
     ensure_dir(cfg["paths"]["benchmark_results"])
     for m in cfg["metrics"]:
@@ -391,6 +424,7 @@ def run_benchmark(benchmark_config, max_workers=None, save_path=None):
         timing_file = os.path.join(cfg["paths"]["benchmark_results"], "timing.csv")
         timing_df.to_csv(timing_file, index=False)
 
+    raise_worker_failures(worker_failures)
     return True
 
 

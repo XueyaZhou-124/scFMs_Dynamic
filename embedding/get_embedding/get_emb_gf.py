@@ -1,13 +1,10 @@
 from geneformer.emb_extractor import EmbExtractor, get_embs, label_cell_embs
 import os
 import scanpy as sc
-import os
 from geneformer.tokenizer import TranscriptomeTokenizer
 from transformers import BertForSequenceClassification
-from peft import get_peft_model, LoraConfig, TaskType
-import peft
 import argparse
-from pathlib import Path
+import torch
 from datasets import load_from_disk
 from collections import Counter
 from geneformer import perturber_utils as pu
@@ -18,6 +15,8 @@ from peft import PeftModel
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type = str, default='/root/new-GF/Geneformer')
+    parser.add_argument('--base_model_path', type=str, default=None)
+    parser.add_argument('--adapter_path', type=str, default=None)
     parser.add_argument('--tokenized_dataset', type = str, default='/personal/scF_dynamic/data/mouse_hematopoiesis/exp1_invitro_timecourse/token.dataset')
     parser.add_argument('--output_path', type = str, default='/personal/scFMs_dynamic/data/outputs/Mouse_hematopoiesis_Zeroshot_gf_emb.csv')
     parser.add_argument('--setting', type = str, default='zeroshot')
@@ -35,12 +34,14 @@ def run(config):
     task_name = config['task_name']
     model = config['model']
     args.model_path = config['embedding']['model_path']
+    args.base_model_path = config['embedding'].get('base_model_path', args.model_path)
+    args.adapter_path = config['embedding'].get('adapter_path', args.model_path)
     args.tokenized_dataset = config['embedding']['dataset_path']  # tokenized dataset from preprocess
     args.output_path = config['embedding']['output_path']
     args.setting = config['embedding']['setting']
     args.select_col = config['embedding'].get('select_col', None)
     args.batch_size = config['embedding'].get('batch_size', 12)
-    args.cell_type_key = config['embedding'].get('cell_type_key', 'cell_type')
+    args.cell_type_key = config['embedding'].get('cell_type_key', 'Time')
 
     print(args)
     main(args)
@@ -66,6 +67,8 @@ def main(args):
     output_directory = os.path.dirname(args.output_path)
     output_prefix = os.path.basename(args.output_path)
     model_directory = args.model_path
+    base_model_path = args.base_model_path or args.model_path
+    adapter_path = args.adapter_path or args.model_path
     select_col = args.select_col
     batch_size = args.batch_size
     cell_type_key = args.cell_type_key
@@ -98,15 +101,21 @@ def main(args):
 
     elif args.setting == 'finetune':
         dataset = load_from_disk(args.tokenized_dataset)
-        
-        model = BertForSequenceClassification.from_pretrained("/root/new-GF/Geneformer",
-                                                        num_labels = len(Counter(dataset[cell_type_key])),
-                                                        output_attentions = False, 
-                                                        output_hidden_states = True).to("cuda")
+
+        if cell_type_key not in dataset.features:
+            raise KeyError(f"cell_type_key '{cell_type_key}' not found in dataset features: {list(dataset.features.keys())}")
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = BertForSequenceClassification.from_pretrained(
+            base_model_path,
+            num_labels=len(Counter(dataset[cell_type_key])),
+            output_attentions=False,
+            output_hidden_states=True,
+        ).to(device)
         layer_to_quant = pu.quant_layers(model) + (-1)
 
-        model = PeftModel.from_pretrained(model, model_directory)
-        model = model.to('cuda')
+        model = PeftModel.from_pretrained(model, adapter_path)
+        model = model.to(device)
         model.eval()
         token_dictionary_file = TOKEN_DICTIONARY_FILE
         with open(token_dictionary_file, "rb") as f:
