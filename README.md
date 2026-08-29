@@ -50,6 +50,16 @@ Please download the weights for the models you wish to evaluate and store them i
 | **UCE** | [Hugging Face - UCE 33M](https://huggingface.co/chen-lab/UCE) | Rosen et al. (*bioRxiv*, 2023) | 33-Layers |
 | **GeneCompass** | [GitHub - GeneCompass](https://github.com/xCompass-AI/GeneCompass) | Yang et al. (*Cell Research*, 2024) | |
 
+**HVG baselines** (trained on the demo dataset; no pretrained weights to download):
+
+| Baseline | Config | Notes |
+| --- | --- | --- |
+| **HVG-PCA** | `configs/emb_configs/emt_hvg.yaml` | Highly variable genes |
+| **HVG-scVI** | `configs/emb_configs/emt_scvi.yaml` | scVI with `Time` as batch key |
+| **HVG-scVI (no batch)** | `configs/emb_configs/emt_scvi_nobatch.yaml` | Same scVI settings without a batch covariate |
+
+scVI requires [scvi-tools](https://docs.scvi-tools.org/) in the Python environment you pass as `<scvi_env>`. Reference: Lopez et al. (*Nature Methods*, 2018).
+
 ---
 
 ### 2. Run the Benchmark in 3 Steps
@@ -83,6 +93,10 @@ Extract latent representations. Pixi automatically handles the environment switc
 pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_geneformer.yaml --model geneformer
 pixi run -e scgpt python scripts/all_embedding.py --config ./configs/emb_configs/emt_scgpt.yaml --model scgpt
 pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_hvg.yaml --model hvg
+# HVG-scVI (Time as batch). Both scVI configs use --model scvi; output_name sets the file key.
+pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi.yaml --model scvi
+# HVG-scVI without batch correction → data/embeddings/EMT/scvi_nobatch_adata_eval.h5ad
+pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
 
 # To run all models sequentially using the provided shell script:
 bash scripts/extract_all_embeddings.sh
@@ -104,17 +118,22 @@ pixi run -e deepruot python scripts/integrate_embedding.py \
     --ref_key hvg \
     --time_key time
 # Optional: restrict models, e.g.  --models hvg geneformer scgpt
+# Include HVG-scVI baselines:       --models hvg geneformer scgpt scvi scvi_nobatch
 ```
 
 #### **Stage III: Trajectory Inference, Alignment & Evaluation**
 
-Run the core benchmark engine to trajectory inference with DeepRUOTv2, alignment & evaluattion.
+Run the core benchmark engine to trajectory inference with DeepRUOTv2, alignment & evaluation.
+
+Add `scvi` and `scvi_nobatch` to the `models:` list in the EMT holdout YAMLs if you want those HVG-scVI baselines in Stage III / Fig. 2.
 
 ```bash
 # Backtracking
 pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt0_config.yaml
-# Interpolation （hold hot timepoint 1）
+# Interpolation (hold out timepoint 1)
 pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt1_config.yaml
+# Interpolation (hold out timepoint 2)
+pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt2_config.yaml
 # Extrapolation
 pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_config/EMT_benchmark_holdt3_config.yaml
 
@@ -122,11 +141,22 @@ pixi run -e deepruot python scripts/benchmark_gpa.py --config configs/benchmark_
 
 ### 3. Visualizing Results
 
-Summary metrics and figures (corresponding to Fig. 2 in the manuscript) are saved in `results/`:
+Holdout metric CSVs (corresponding to Fig. 2 in the manuscript) are written under `results/gpa/`:
 
 ```bash
 cat ./results/gpa/EMT_holdt0/w1tmv.csv
 cat ./results/gpa/EMT_holdt0/pseudotime.csv
 cat ./results/gpa/EMT_holdt0/tcvc.csv
 ```
+
+Aggregate all EMT holdouts into the tables used by Fig. 2, then open the notebook:
+
+```bash
+pixi run python main_figures/aggregate_fig2_metrics.py \
+  --results-root results/gpa \
+  --dataset EMT \
+  --output-dir main_figures
+```
+
+`main_figures/fig2.ipynb` reads `all_w1.csv`, `all_pseudotime.csv`, and `all_tcvc.csv` from `main_figures/`.
 
