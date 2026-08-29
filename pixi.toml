@@ -49,6 +49,9 @@ tqdm = "==4.67.1"
 [feature.torch23.pypi-dependencies]
 torch = ">=2.3.0,<2.4.0"
 
+[feature.scvi.pypi-dependencies]
+scvi-tools = "==1.4.1"
+
 [feature.optuna.pypi-dependencies]
 optuna = "*"
 optuna-integration = { version = ">=3.6.0, <4" }
@@ -147,4 +150,5 @@ geneformer = ["torch23", "optuna", "geneformer", "deepspeed"]
 genecompass = ["torch23", "optuna", "genecompass", "deepspeed"]
 scfoundation = ["torch23", "scfoundation"]
 deepruot = ["deepruot"]
+scvi = ["torch23", "scvi"]
 

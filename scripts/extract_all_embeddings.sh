@@ -4,6 +4,6 @@ pixi run -e scfoundation python scripts/all_embedding.py --config ./configs/emb_
 pixi run -e uce python scripts/all_embedding.py --config ./configs/emb_configs/emt_uce.yaml --model uce
 pixi run -e genecompass python scripts/all_embedding.py --config ./configs/emb_configs/emt_genecompass.yaml --model genecompass
 pixi run -e deepruot python scripts/all_embedding.py --config ./configs/emb_configs/emt_hvg.yaml --model hvg
-# scVI examples (requires an environment with scvi-tools):
-# pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi.yaml --model scvi
-# pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
+# scVI examples:
+# pixi run -e scvi python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi.yaml --model scvi
+# pixi run -e scvi python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi

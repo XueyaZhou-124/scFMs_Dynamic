@@ -3,7 +3,7 @@ task_name: EMT
 
 # HVG-scVI without a batch covariate (no Time batch correction).
 # Keep --model scvi; output_name becomes the integrated key scvi_nobatch.
-#   pixi run -e <scvi_env> python scripts/all_embedding.py \
+#   pixi run -e scvi python scripts/all_embedding.py \
 #     --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
 
 data:

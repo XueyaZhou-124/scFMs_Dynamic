@@ -30,6 +30,8 @@ cd scFMs_Dynamic
 
 # Initialize all environments via Pixi
 pixi install
+# HVG-scVI baselines (scvi-tools==1.4.1, torch 2.3)
+pixi install -e scvi
 # Ensure you are in the project root
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 ```
@@ -58,7 +60,7 @@ Please download the weights for the models you wish to evaluate and store them i
 | **HVG-scVI** | `configs/emb_configs/emt_scvi.yaml` | scVI with `Time` as batch key |
 | **HVG-scVI (no batch)** | `configs/emb_configs/emt_scvi_nobatch.yaml` | Same scVI settings without a batch covariate |
 
-scVI requires [scvi-tools](https://docs.scvi-tools.org/) in the Python environment you pass as `<scvi_env>`. Reference: Lopez et al. (*Nature Methods*, 2018).
+scVI uses the Pixi environment `scvi` (`scvi-tools==1.4.1` on top of the existing `torch23` feature). After `pixi install -e scvi`, run commands with `pixi run -e scvi`. Reference: Lopez et al. (*Nature Methods*, 2018).
 
 ---
 
@@ -94,9 +96,9 @@ pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_co
 pixi run -e scgpt python scripts/all_embedding.py --config ./configs/emb_configs/emt_scgpt.yaml --model scgpt
 pixi run -e geneformer python scripts/all_embedding.py --config ./configs/emb_configs/emt_hvg.yaml --model hvg
 # HVG-scVI (Time as batch). Both scVI configs use --model scvi; output_name sets the file key.
-pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi.yaml --model scvi
+pixi run -e scvi python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi.yaml --model scvi
 # HVG-scVI without batch correction → data/embeddings/EMT/scvi_nobatch_adata_eval.h5ad
-pixi run -e <scvi_env> python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
+pixi run -e scvi python scripts/all_embedding.py --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
 
 # To run all models sequentially using the provided shell script:
 bash scripts/extract_all_embeddings.sh

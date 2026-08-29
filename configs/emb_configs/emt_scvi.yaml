@@ -2,7 +2,7 @@ model: scvi
 task_name: EMT
 
 # HVG-scVI with Time as the batch covariate.
-#   pixi run -e <scvi_env> python scripts/all_embedding.py \
+#   pixi run -e scvi python scripts/all_embedding.py \
 #     --config ./configs/emb_configs/emt_scvi.yaml --model scvi
 
 data:
