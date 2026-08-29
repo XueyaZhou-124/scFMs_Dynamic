@@ -92,3 +92,6 @@ data/raw/synthetic_branching/
 
 # DeepRUOT training / run logs (regenerated locally)
 DeepRUOTv2/logs/
+
+# Unit tests stay local; not part of public code availability.
+tests/
