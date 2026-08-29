@@ -1,9 +1,10 @@
 model: scvi
 task_name: EMT
 
-# HVG-scVI with Time as the batch covariate.
+# HVG-scVI without a batch covariate (no Time batch correction).
+# Keep --model scvi; output_name becomes the integrated key scvi_nobatch.
 #   pixi run -e <scvi_env> python scripts/all_embedding.py \
-#     --config ./configs/emb_configs/emt_scvi.yaml --model scvi
+#     --config ./configs/emb_configs/emt_scvi_nobatch.yaml --model scvi
 
 data:
   input_path: ./data/raw/emt.h5ad
@@ -11,9 +12,8 @@ data:
 embedding:
   # Optional: if your AnnData has raw counts stored in a layer, set it here.
   # count_layer: counts
-  output_name: scvi
-  obsm_key: X_scvi
-  batch_key: Time
+  output_name: scvi_nobatch
+  obsm_key: X_scvi_nobatch
   n_latent: 50
   n_layers: 2
   n_hidden: 128
